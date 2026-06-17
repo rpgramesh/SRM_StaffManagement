@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Verify Staff Record</title>
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-firestore-compat.js"></script>
+</head>
+<body>
+    <h1>Verify Staff Record</h1>
+    <div id="result"></div>
+
+    <script>
+        // Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyBkZyF5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z",
+            authDomain: "srm-staff-management.firebaseapp.com",
+            projectId: "srm-staff-management",
+            storageBucket: "srm-staff-management.appspot.com",
+            messagingSenderId: "123456789",
+            appId: "1:123456789:web:abcdef123456"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        // Function to verify staff record
+        async function verifyStaffRecord() {
+            try {
+                const querySnapshot = await db.collection('staff')
+                    .where('phone', '==', '+919843095986')
+                    .limit(1)
+                    .get();
+
+                const resultDiv = document.getElementById('result');
+                
+                if (querySnapshot.empty) {
+                    resultDiv.innerHTML = '<p style="color: red;">❌ No staff record found for phone +919843095986</p>';
+                } else {
+                    const doc = querySnapshot.docs[0];
+                    const data = doc.data();
+                    
+                    resultDiv.innerHTML = `
+                        <p style="color: green;">✅ Staff record found!</p>
+                        <h3>Record Details:</h3>
+                        <ul>
+                            <li><strong>Document ID:</strong> ${doc.id}</li>
+                            <li><strong>Phone:</strong> ${data.phone}</li>
+                            <li><strong>Name:</strong> ${data.name || 'Not set'}</li>
+                            <li><strong>Role:</strong> ${data.role || 'Not set'}</li>
+                            <li><strong>PIN (hashed):</strong> ${data.pin ? 'Present (hidden for security)' : 'Not set'}</li>
+                            <li><strong>Is Active:</strong> ${data.isActive}</li>
+                            <li><strong>Created:</strong> ${data.createdAt ? new Date(data.createdAt.seconds * 1000).toLocaleString() : 'Not set'}</li>
+                        </ul>
+                    `;
+                }
+            } catch (error) {
+                document.getElementById('result').innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+            }
+        }
+
+        // Run verification when page loads
+        window.onload = verifyStaffRecord;
+    </script>
+</body>
+</html>

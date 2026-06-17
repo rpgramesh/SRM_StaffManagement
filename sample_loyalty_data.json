@@ -1,0 +1,75 @@
+{
+  "loyalty_rewards": [
+    {
+      "title": "Free Appetizer",
+      "description": "Get any starter for free",
+      "pointsCost": 500,
+      "category": "food",
+      "isActive": true,
+      "availableQuantity": null,
+      "usedQuantity": 0,
+      "iconName": "restaurant",
+      "color": "orange",
+      "terms": "Valid on all appetizers. Cannot be combined with other offers."
+    },
+    {
+      "title": "10% Off Next Order",
+      "description": "Save 10% on your next purchase",
+      "pointsCost": 750,
+      "category": "discount",
+      "isActive": true,
+      "availableQuantity": null,
+      "usedQuantity": 0,
+      "iconName": "percent",
+      "color": "green",
+      "terms": "Valid for 30 days from redemption. Minimum order ₹300."
+    },
+    {
+      "title": "Free Dessert",
+      "description": "Choose any dessert on the house",
+      "pointsCost": 800,
+      "category": "food",
+      "isActive": true,
+      "availableQuantity": null,
+      "usedQuantity": 0,
+      "iconName": "cake",
+      "color": "orange",
+      "terms": "Valid on all desserts. Dine-in only."
+    },
+    {
+      "title": "Free Main Course",
+      "description": "Get any main course for free",
+      "pointsCost": 1500,
+      "category": "food",
+      "isActive": false,
+      "availableQuantity": null,
+      "usedQuantity": 0,
+      "iconName": "restaurant_menu",
+      "color": "grey",
+      "terms": "Valid on main courses up to ₹500. Dine-in only."
+    },
+    {
+      "title": "20% Off Next Order",
+      "description": "Save 20% on your next purchase",
+      "pointsCost": 2000,
+      "category": "discount",
+      "isActive": false,
+      "availableQuantity": null,
+      "usedQuantity": 0,
+      "iconName": "percent",
+      "color": "grey",
+      "terms": "Valid for 30 days from redemption. Minimum order ₹500."
+    }
+  ],
+  "sample_user_loyalty_data": {
+    "userId": "[REPLACE_WITH_ACTUAL_USER_ID]",
+    "totalPoints": 1250,
+    "totalEarned": 1250,
+    "totalRedeemed": 0,
+    "tier": "bronze",
+    "nextTierPoints": 750,
+    "lastActivity": "[CURRENT_TIMESTAMP]",
+    "joinedAt": "[CURRENT_TIMESTAMP]",
+    "updatedAt": "[CURRENT_TIMESTAMP]"
+  }
+}

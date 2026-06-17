@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Firebase Loyalty Data Setup</title>
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-firestore-compat.js"></script>
+</head>
+<body>
+    <h1>Firebase Loyalty Data Setup</h1>
+    <p>Open browser console and run the setup functions.</p>
+    
+    <script>
+        // Firebase configuration - replace with your actual config
+        const firebaseConfig = {
+            // Add your Firebase config here
+            // You can find this in your Firebase project settings
+        };
+        
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        
+        // Function to add loyalty rewards
+        async function setupLoyaltyRewards() {
+            const rewards = [
+                {
+                    title: 'Free Appetizer',
+                    description: 'Get any starter for free',
+                    pointsCost: 500,
+                    category: 'food',
+                    isActive: true,
+                    availableQuantity: null,
+                    usedQuantity: 0,
+                    validFrom: firebase.firestore.Timestamp.now(),
+                    validUntil: null,
+                    iconName: 'restaurant',
+                    color: 'orange',
+                    terms: 'Valid on all appetizers. Cannot be combined with other offers.',
+                    createdAt: firebase.firestore.Timestamp.now(),
+                    updatedAt: firebase.firestore.Timestamp.now()
+                },
+                {
+                    title: '10% Off Next Order',
+                    description: 'Save 10% on your next purchase',
+                    pointsCost: 750,
+                    category: 'discount',
+                    isActive: true,
+                    availableQuantity: null,
+                    usedQuantity: 0,
+                    validFrom: firebase.firestore.Timestamp.now(),
+                    validUntil: null,
+                    iconName: 'percent',
+                    color: 'green',
+                    terms: 'Valid for 30 days from redemption. Minimum order ₹300.',
+                    createdAt: firebase.firestore.Timestamp.now(),
+                    updatedAt: firebase.firestore.Timestamp.now()
+                },
+                {
+                    title: 'Free Dessert',
+                    description: 'Choose any dessert on the house',
+                    pointsCost: 800,
+                    category: 'food',
+                    isActive: true,
+                    availableQuantity: null,
+                    usedQuantity: 0,
+                    validFrom: firebase.firestore.Timestamp.now(),
+                    validUntil: null,
+                    iconName: 'cake',
+                    color: 'orange',
+                    terms: 'Valid on all desserts. Dine-in only.',
+                    createdAt: firebase.firestore.Timestamp.now(),
+                    updatedAt: firebase.firestore.Timestamp.now()
+                },
+                {
+                    title: 'Free Main Course',
+                    description: 'Get any main course for free',
+                    pointsCost: 1500,
+                    category: 'food',
+                    isActive: false,
+                    availableQuantity: null,
+                    usedQuantity: 0,
+                    validFrom: firebase.firestore.Timestamp.now(),
+                    validUntil: null,
+                    iconName: 'restaurant_menu',
+                    color: 'grey',
+                    terms: 'Valid on main courses up to ₹500. Dine-in only.',
+                    createdAt: firebase.firestore.Timestamp.now(),
+                    updatedAt: firebase.firestore.Timestamp.now()
+                },
+                {
+                    title: '20% Off Next Order',
+                    description: 'Save 20% on your next purchase',
+                    pointsCost: 2000,
+                    category: 'discount',
+                    isActive: false,
+                    availableQuantity: null,
+                    usedQuantity: 0,
+                    validFrom: firebase.firestore.Timestamp.now(),
+                    validUntil: null,
+                    iconName: 'percent',
+                    color: 'grey',
+                    terms: 'Valid for 30 days from redemption. Minimum order ₹500.',
+                    createdAt: firebase.firestore.Timestamp.now(),
+                    updatedAt: firebase.firestore.Timestamp.now()
+                }
+            ];
+            
+            const batch = db.batch();
+            
+            rewards.forEach(reward => {
+                const docRef = db.collection('loyalty_rewards').doc();
+                batch.set(docRef, reward);
+            });
+            
+            try {
+                await batch.commit();
+                console.log('✅ Successfully added loyalty rewards!');
+                return true;
+            } catch (error) {
+                console.error('❌ Error adding loyalty rewards:', error);
+                return false;
+            }
+        }
+        
+        // Function to create sample user loyalty data
+        async function createSampleUserData(userId) {
+            const userData = {
+                userId: userId,
+                totalPoints: 1250,
+                totalEarned: 1250,
+                totalRedeemed: 0,
+                tier: 'bronze',
+                nextTierPoints: 750,
+                lastActivity: firebase.firestore.Timestamp.now(),
+                joinedAt: firebase.firestore.Timestamp.now(),
+                updatedAt: firebase.firestore.Timestamp.now()
+            };
+            
+            try {
+                await db.collection('user_loyalty_data').doc(userId).set(userData);
+                console.log('✅ Successfully created user loyalty data for:', userId);
+                return true;
+            } catch (error) {
+                console.error('❌ Error creating user loyalty data:', error);
+                return false;
+            }
+        }
+        
+        // Make functions available globally
+        window.setupLoyaltyRewards = setupLoyaltyRewards;
+        window.createSampleUserData = createSampleUserData;
+        
+        console.log('🚀 Firebase setup functions loaded!');
+        console.log('Run setupLoyaltyRewards() to add loyalty rewards');
+        console.log('Run createSampleUserData("your-user-id") to create sample user data');
+    </script>
+</body>
+</html>

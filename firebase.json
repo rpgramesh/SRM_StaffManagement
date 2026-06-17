@@ -1,0 +1,44 @@
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "delhinightsapps",
+          "appId": "1:679661724443:android:d71267a88370293fdfe9be",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "ios": {
+        "default": {
+          "projectId": "delhinightsapps",
+          "appId": "1:679661724443:ios:b10c36dc4bc0a290dfe9be",
+          "uploadDebugSymbols": false,
+          "fileOutput": "ios/Runner/GoogleService-Info.plist"
+        }
+      },
+      "macos": {
+        "default": {
+          "projectId": "delhinightsapps",
+          "appId": "1:679661724443:ios:b10c36dc4bc0a290dfe9be",
+          "uploadDebugSymbols": false,
+          "fileOutput": "macos/Runner/GoogleService-Info.plist"
+        }
+      }
+    }
+  },
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "functions": {
+    "source": "functions",
+    "runtime": "nodejs18"
+  },
+  "emulators": {
+    "singleProjectMode": true,
+    "firestore": {
+      "port": 8081,
+      "host": "localhost"
+    }
+  }
+}

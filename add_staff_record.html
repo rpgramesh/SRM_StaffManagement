@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Add Staff Record</title>
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-firestore.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth.js"></script>
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.0.0/firebase-app.js';
+        import { getFirestore, doc, setDoc } from 'https://www.gstatic.com/firebasejs/9.0.0/firebase-firestore.js';
+        import { getAuth } from 'https://www.gstatic.com/firebasejs/9.0.0/firebase-auth.js';
+        
+        const firebaseConfig = {
+            apiKey: "AIzaSyDGpAHia_wEmrhnmYjrPf1n1TrAzwEMiAI",
+            authDomain: "delhinightsapps.firebaseapp.com",
+            projectId: "delhinightsapps",
+            storageBucket: "delhinightsapps.appspot.com",
+            messagingSenderId: "1092998056708",
+            appId: "1:1092998056708:web:d909e9d18e8d8b9b6750b5",
+            measurementId: "G-QZPQZQZQZQ"
+        };
+        
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+        
+        async function addStaffRecord() {
+            try {
+                // Hash the PIN using SHA-256
+                const encoder = new TextEncoder();
+                const data = encoder.encode('095986');
+                const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+                const hashArray = Array.from(new Uint8Array(hashBuffer));
+                const hashedPin = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+                
+                const staffData = {
+                    phone: '+919843095986',
+                    pin: hashedPin,
+                    name: 'Test Staff',
+                    role: 'staff',
+                    isActive: true,
+                    createdAt: new Date(),
+                    updatedAt: new Date()
+                };
+                
+                await setDoc(doc(db, 'staff', '+919843095986'), staffData);
+                document.getElementById('result').innerHTML = '<p style="color: green;">Staff record added successfully!</p><p>Phone: +919843095986</p><p>PIN: 095986</p><p>Hashed PIN: ' + hashedPin + '</p>';
+            } catch (error) {
+                document.getElementById('result').innerHTML = '<p style="color: red;">Error: ' + error.message + '</p>';
+            }
+        }
+        
+        window.addStaffRecord = addStaffRecord;
+    </script>
+</head>
+<body>
+    <h1>Add Staff Record to Firebase</h1>
+    <button onclick="addStaffRecord()">Add Staff Record</button>
+    <div id="result"></div>
+</body>
+</html>

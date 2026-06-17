@@ -1,0 +1,82 @@
+name: staff_management_app
+description: Staff Management System - A comprehensive staff management application with scheduling, check-in/out, reporting, and dasher assignment features.
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.5
+  google_fonts: ^6.2.1
+  provider: ^6.0.5
+  cached_network_image: ^3.2.3
+  flutter_svg: ^2.0.7
+  location: ^5.0.0
+  firebase_auth: ^5.7.0
+  cloud_firestore: ^5.6.12
+  firebase_core: ^3.15.2
+  cloud_functions: ^5.2.0
+  google_sign_in: ^6.1.6
+  google_maps_flutter: ^2.6.1
+  uuid: ^4.3.3
+  flutter_clip_shadow: ^1.0.0
+
+  firebase_storage: ^12.4.10
+  image_picker: ^1.0.0
+  intl: ^0.20.2
+  firebase_messaging: ^15.2.4
+  pin_code_fields: ^8.0.1
+  local_auth: ^2.3.0
+  flutter_local_notifications: ^17.0.0
+  pin_keyboard: ^1.1.2
+  table_calendar: ^3.0.9
+  crypto: ^3.0.3
+  fl_chart: ^0.66.0
+  shared_preferences: ^2.2.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_launcher_icons: ^0.13.1
+  flutter_lints: ^6.0.0
+flutter_icons:
+  image: assets/images/delhinightslogo.png
+  android: true
+  ios: true
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+    - assets/icons/
+    - assets/images/real/
+    - assets/images/virtual/
+fonts:
+    - family: Metropolis
+      fonts:
+        - asset: assets/fonts/Metropolis-Regular.ttf
+        - asset: assets/fonts/Metropolis-RegularItalic.ttf
+          style: italic
+        - asset: assets/fonts/Metropolis-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Metropolis-BoldItalic.ttf
+          style: italic
+          weight: 700
+        - asset: assets/fonts/Metropolis-ExtraBold.ttf
+          weight: 900
+        - asset: assets/fonts/Metropolis-ExtraBoldItalic.ttf
+          style: italic
+          weight: 900
+        - asset: assets/fonts/Metropolis-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Metropolis-MediumItalic.ttf
+          weight: 500
+          style: italic
+        - asset: assets/fonts/Metropolis-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Metropolis-SemiBoldItalic.ttf
+          weight: 600
+          style: italic

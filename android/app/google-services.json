@@ -1,0 +1,82 @@
+{
+  "project_info": {
+    "project_number": "679661724443",
+    "project_id": "delhinightsapps",
+    "storage_bucket": "delhinightsapps.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:679661724443:android:65112da9ca09ad57dfe9be",
+        "android_client_info": {
+          "package_name": "com.delhinights.restaurant_ap"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "679661724443-hemra57812ucvdgokppb8hod6c26krv4.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDX2_WiiwQZUqHlYg6XVwbws5cdk_09HhM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "679661724443-hemra57812ucvdgokppb8hod6c26krv4.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "679661724443-prj8moiab12evl5bah437hkg4cuq3aib.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.restaurantApp"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:679661724443:android:d71267a88370293fdfe9be",
+        "android_client_info": {
+          "package_name": "com.delhinights.restaurant_app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "679661724443-hemra57812ucvdgokppb8hod6c26krv4.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDX2_WiiwQZUqHlYg6XVwbws5cdk_09HhM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "679661724443-hemra57812ucvdgokppb8hod6c26krv4.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "679661724443-prj8moiab12evl5bah437hkg4cuq3aib.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.restaurantApp"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
