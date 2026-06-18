@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/staff.dart';
 import '../../services/staff_service.dart';
-import '../../services/auth_service.dart';
+import '../../utils/australian_phone_number.dart';
+import '../../utils/australian_phone_text_input_formatter.dart';
 
 class UpdateProfileScreen extends StatefulWidget {
   final Staff staff;
@@ -16,25 +18,66 @@ class UpdateProfileScreen extends StatefulWidget {
 class _UpdateProfileScreenState extends State<UpdateProfileScreen> {
   final _formKey = GlobalKey<FormState>();
   final _staffService = StaffService();
-  final _authService = AuthService();
-  
+
   late TextEditingController _nameController;
   late TextEditingController _phoneController;
   late TextEditingController _emergencyContactController;
   late TextEditingController _addressController;
   late TextEditingController _skillsController;
-  
+
   String? _selectedShiftPreference;
   int? _workHoursPerWeek;
   bool _isLoading = false;
   bool _hasChanges = false;
-  
+
   final List<String> _shiftPreferences = [
     'Morning (6 AM - 2 PM)',
     'Afternoon (2 PM - 10 PM)',
     'Night (10 PM - 6 AM)',
     'Flexible',
   ];
+
+  String? _validateRequiredAustralianPhone(String? value) {
+    final digits = AustralianPhoneNumber.digitsOnly(value ?? '');
+    if (digits.isEmpty) {
+      return 'Phone number is required';
+    }
+
+    final prefixError = AustralianPhoneNumber.validationErrorForDigits(
+      digits,
+      internationalMode: false,
+    );
+    if (prefixError != null) {
+      return prefixError;
+    }
+
+    if (!AustralianPhoneNumber.isValidLocalDigits(digits)) {
+      return AustralianPhoneNumber.submitErrorMessage(internationalMode: false);
+    }
+
+    return null;
+  }
+
+  String? _validateOptionalAustralianPhone(String? value) {
+    final digits = AustralianPhoneNumber.digitsOnly(value ?? '');
+    if (digits.isEmpty) {
+      return null;
+    }
+
+    final prefixError = AustralianPhoneNumber.validationErrorForDigits(
+      digits,
+      internationalMode: false,
+    );
+    if (prefixError != null) {
+      return prefixError;
+    }
+
+    if (!AustralianPhoneNumber.isValidLocalDigits(digits)) {
+      return AustralianPhoneNumber.submitErrorMessage(internationalMode: false);
+    }
+
+    return null;
+  }
 
   @override
   void initState() {
@@ -44,16 +87,23 @@ class _UpdateProfileScreenState extends State<UpdateProfileScreen> {
 
   void _initializeControllers() {
     _nameController = TextEditingController(text: widget.staff.name);
-    _phoneController = TextEditingController(text: widget.staff.phone);
-    _emergencyContactController = TextEditingController(text: widget.staff.emergencyContact ?? '');
-    _addressController = TextEditingController(text: widget.staff.address ?? '');
-    _skillsController = TextEditingController(
-      text: widget.staff.skills?.join(', ') ?? ''
+    _phoneController = TextEditingController(
+      text: AustralianPhoneNumber.tryParse(widget.staff.phone)?.localDisplay ??
+          widget.staff.phone,
     );
-    
+    _emergencyContactController = TextEditingController(
+      text: AustralianPhoneNumber.tryParse(widget.staff.emergencyContact ?? '')
+              ?.localDisplay ??
+          (widget.staff.emergencyContact ?? ''),
+    );
+    _addressController =
+        TextEditingController(text: widget.staff.address ?? '');
+    _skillsController =
+        TextEditingController(text: widget.staff.skills?.join(', ') ?? '');
+
     _selectedShiftPreference = widget.staff.shiftPreference;
     _workHoursPerWeek = widget.staff.workHoursPerWeek;
-    
+
     // Add listeners to detect changes
     _nameController.addListener(_onFieldChanged);
     _phoneController.addListener(_onFieldChanged);
@@ -89,7 +139,8 @@ class _UpdateProfileScreenState extends State<UpdateProfileScreen> {
     final prefs = await SharedPreferences.getInstance();
     final currentStaffId = prefs.getString('currentStaffId');
     if (currentStaffId == null) {
-      _showErrorDialog('Authentication Error', 'Please log in to update your profile.');
+      _showErrorDialog(
+          'Authentication Error', 'Please log in to update your profile.');
       return;
     }
 
@@ -105,15 +156,39 @@ class _UpdateProfileScreenState extends State<UpdateProfileScreen> {
           .where((skill) => skill.isNotEmpty)
           .toList();
 
+      final normalizedPhone =
+          AustralianPhoneNumber.normalizeToStorageFormat(_phoneController.text);
+      final normalizedEmergencyContact =
+          _emergencyContactController.text.trim().isEmpty
+              ? null
+              : AustralianPhoneNumber.normalizeToStorageFormat(
+                  _emergencyContactController.text,
+                );
+
+      if (normalizedPhone == null) {
+        _showErrorDialog(
+          'Invalid Phone Number',
+          AustralianPhoneNumber.submitErrorMessage(internationalMode: false),
+        );
+        return;
+      }
+
+      if (_emergencyContactController.text.trim().isNotEmpty &&
+          normalizedEmergencyContact == null) {
+        _showErrorDialog(
+          'Invalid Emergency Contact',
+          AustralianPhoneNumber.submitErrorMessage(internationalMode: false),
+        );
+        return;
+      }
+
       // Create updated staff object
       final updatedStaff = widget.staff.copyWith(
         name: _nameController.text.trim(),
-        phone: _phoneController.text.trim(),
-        emergencyContact: _emergencyContactController.text.trim().isEmpty 
-            ? null 
-            : _emergencyContactController.text.trim(),
-        address: _addressController.text.trim().isEmpty 
-            ? null 
+        phone: normalizedPhone,
+        emergencyContact: normalizedEmergencyContact,
+        address: _addressController.text.trim().isEmpty
+            ? null
             : _addressController.text.trim(),
         shiftPreference: _selectedShiftPreference,
         workHoursPerWeek: _workHoursPerWeek,
@@ -129,7 +204,8 @@ class _UpdateProfileScreenState extends State<UpdateProfileScreen> {
 
       _showSuccessDialog();
     } catch (e) {
-      _showErrorDialog('Update Failed', 'Failed to update profile: ${e.toString()}');
+      _showErrorDialog(
+          'Update Failed', 'Failed to update profile: ${e.toString()}');
     } finally {
       setState(() {
         _isLoading = false;
@@ -148,7 +224,8 @@ class _UpdateProfileScreenState extends State<UpdateProfileScreen> {
           TextButton(
             onPressed: () {
               Navigator.of(context).pop();
-              Navigator.of(context).pop(true); // Return to previous screen with success
+              Navigator.of(context)
+                  .pop(true); // Return to previous screen with success
             },
             child: const Text('OK'),
           ),
@@ -176,12 +253,13 @@ class _UpdateProfileScreenState extends State<UpdateProfileScreen> {
 
   Future<bool> _onWillPop() async {
     if (!_hasChanges) return true;
-    
+
     final result = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Unsaved Changes'),
-        content: const Text('You have unsaved changes. Are you sure you want to leave?'),
+        content: const Text(
+            'You have unsaved changes. Are you sure you want to leave?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -194,7 +272,7 @@ class _UpdateProfileScreenState extends State<UpdateProfileScreen> {
         ],
       ),
     );
-    
+
     return result ?? false;
   }
 
@@ -271,15 +349,15 @@ class _UpdateProfileScreenState extends State<UpdateProfileScreen> {
                       Text(
                         widget.staff.department,
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Colors.grey[600],
-                        ),
+                              color: Colors.grey[600],
+                            ),
                       ),
                     ],
                   ),
                 ),
               ),
               const SizedBox(height: 16),
-              
+
               // Personal Information Section
               Card(
                 child: Padding(
@@ -292,7 +370,6 @@ class _UpdateProfileScreenState extends State<UpdateProfileScreen> {
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                       const SizedBox(height: 16),
-                      
                       TextFormField(
                         controller: _nameController,
                         decoration: const InputDecoration(
@@ -308,24 +385,24 @@ class _UpdateProfileScreenState extends State<UpdateProfileScreen> {
                         },
                       ),
                       const SizedBox(height: 16),
-                      
                       TextFormField(
                         controller: _phoneController,
                         decoration: const InputDecoration(
                           labelText: 'Phone Number',
                           prefixIcon: Icon(Icons.phone),
+                          hintText: '(04) 1234 5678',
                           border: OutlineInputBorder(),
                         ),
                         keyboardType: TextInputType.phone,
+                        inputFormatters: <TextInputFormatter>[
+                          FilteringTextInputFormatter.digitsOnly,
+                          AustralianLocalPhoneInputFormatter(),
+                        ],
                         validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
-                            return 'Phone number is required';
-                          }
-                          return null;
+                          return _validateRequiredAustralianPhone(value);
                         },
                       ),
                       const SizedBox(height: 16),
-                      
                       TextFormField(
                         controller: _emergencyContactController,
                         decoration: const InputDecoration(
@@ -333,11 +410,18 @@ class _UpdateProfileScreenState extends State<UpdateProfileScreen> {
                           prefixIcon: Icon(Icons.emergency),
                           border: OutlineInputBorder(),
                           helperText: 'Optional',
+                          hintText: '(02) 1234 5678',
                         ),
                         keyboardType: TextInputType.phone,
+                        inputFormatters: <TextInputFormatter>[
+                          FilteringTextInputFormatter.digitsOnly,
+                          AustralianLocalPhoneInputFormatter(),
+                        ],
+                        validator: (value) {
+                          return _validateOptionalAustralianPhone(value);
+                        },
                       ),
                       const SizedBox(height: 16),
-                      
                       TextFormField(
                         controller: _addressController,
                         decoration: const InputDecoration(
@@ -353,7 +437,7 @@ class _UpdateProfileScreenState extends State<UpdateProfileScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-              
+
               // Work Preferences Section
               Card(
                 child: Padding(
@@ -366,7 +450,6 @@ class _UpdateProfileScreenState extends State<UpdateProfileScreen> {
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                       const SizedBox(height: 16),
-                      
                       DropdownButtonFormField<String>(
                         initialValue: _selectedShiftPreference,
                         decoration: const InputDecoration(
@@ -389,7 +472,6 @@ class _UpdateProfileScreenState extends State<UpdateProfileScreen> {
                         },
                       ),
                       const SizedBox(height: 16),
-                      
                       DropdownButtonFormField<int>(
                         initialValue: _workHoursPerWeek,
                         decoration: const InputDecoration(
@@ -412,7 +494,6 @@ class _UpdateProfileScreenState extends State<UpdateProfileScreen> {
                         },
                       ),
                       const SizedBox(height: 16),
-                      
                       TextFormField(
                         controller: _skillsController,
                         decoration: const InputDecoration(
@@ -428,7 +509,7 @@ class _UpdateProfileScreenState extends State<UpdateProfileScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-              
+
               // Read-only Information Section
               Card(
                 child: Padding(
@@ -441,28 +522,30 @@ class _UpdateProfileScreenState extends State<UpdateProfileScreen> {
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                       const SizedBox(height: 16),
-                      
-                      _buildReadOnlyField('Email', widget.staff.email, Icons.email),
+                      _buildReadOnlyField(
+                          'Email', widget.staff.email, Icons.email),
                       const SizedBox(height: 12),
-                      _buildReadOnlyField('Employee ID', widget.staff.id, Icons.badge),
+                      _buildReadOnlyField(
+                          'Employee ID', widget.staff.id, Icons.badge),
                       const SizedBox(height: 12),
-                      _buildReadOnlyField('Hire Date', 
-                          '${widget.staff.hireDate.day}/${widget.staff.hireDate.month}/${widget.staff.hireDate.year}', 
+                      _buildReadOnlyField(
+                          'Hire Date',
+                          '${widget.staff.hireDate.day}/${widget.staff.hireDate.month}/${widget.staff.hireDate.year}',
                           Icons.calendar_today),
                       const SizedBox(height: 12),
-                      _buildReadOnlyField('Total Hours Worked', 
-                          '${widget.staff.totalHoursWorked.toStringAsFixed(1)} hours', 
+                      _buildReadOnlyField(
+                          'Total Hours Worked',
+                          '${widget.staff.totalHoursWorked.toStringAsFixed(1)} hours',
                           Icons.timer),
                       const SizedBox(height: 12),
-                      _buildReadOnlyField('Shifts Completed', 
-                          '${widget.staff.shiftsCompleted} shifts', 
-                          Icons.work),
+                      _buildReadOnlyField('Shifts Completed',
+                          '${widget.staff.shiftsCompleted} shifts', Icons.work),
                     ],
                   ),
                 ),
               ),
               const SizedBox(height: 32),
-              
+
               // Update Button
               if (_hasChanges)
                 ElevatedButton(

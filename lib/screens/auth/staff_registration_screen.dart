@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
 import '../../services/auth_service.dart';
+import '../../utils/australian_phone_number.dart';
+import '../../utils/australian_phone_text_input_formatter.dart';
 
 class StaffRegistrationScreen extends StatefulWidget {
   const StaffRegistrationScreen({super.key});
 
   @override
-  State<StaffRegistrationScreen> createState() => _StaffRegistrationScreenState();
+  State<StaffRegistrationScreen> createState() =>
+      _StaffRegistrationScreenState();
 }
 
 class _StaffRegistrationScreenState extends State<StaffRegistrationScreen> {
@@ -17,7 +21,7 @@ class _StaffRegistrationScreenState extends State<StaffRegistrationScreen> {
   final _confirmPinController = TextEditingController();
   final _emailController = TextEditingController();
   final _departmentController = TextEditingController();
-  
+
   String _selectedRole = 'Staff';
   bool _isLoading = false;
   bool _obscurePin = true;
@@ -56,16 +60,25 @@ class _StaffRegistrationScreenState extends State<StaffRegistrationScreen> {
 
     try {
       final authService = AuthService();
-      
+
       // Validate PIN format
       if (!authService.isValidPin(_pinController.text)) {
         throw Exception('PIN must be exactly 6 digits');
       }
 
       // Validate phone number format
-      final phoneNumber = '+91${_phoneController.text}';
+      final phoneNumber = AustralianPhoneNumber.normalizeToStorageFormat(
+        _phoneController.text.trim(),
+      );
+      if (phoneNumber == null) {
+        throw Exception(AustralianPhoneNumber.submitErrorMessage(
+          internationalMode: false,
+        ));
+      }
       if (!authService.isValidPhoneNumber(phoneNumber)) {
-        throw Exception('Invalid phone number format');
+        throw Exception(AustralianPhoneNumber.submitErrorMessage(
+          internationalMode: false,
+        ));
       }
 
       // Create staff account
@@ -74,13 +87,17 @@ class _StaffRegistrationScreenState extends State<StaffRegistrationScreen> {
         pin: _pinController.text,
         name: _nameController.text.trim(),
         role: _selectedRole,
-        department: _departmentController.text.trim().isEmpty 
-            ? null 
+        department: _departmentController.text.trim().isEmpty
+            ? null
             : _departmentController.text.trim(),
-        email: _emailController.text.trim().isEmpty 
-            ? null 
+        email: _emailController.text.trim().isEmpty
+            ? null
             : _emailController.text.trim(),
       );
+
+      if (!mounted) {
+        return;
+      }
 
       // Show success message
       ScaffoldMessenger.of(context).showSnackBar(
@@ -102,8 +119,10 @@ class _StaffRegistrationScreenState extends State<StaffRegistrationScreen> {
       setState(() {
         _selectedRole = 'Staff';
       });
-
     } catch (e) {
+      if (!mounted) {
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error: ${e.toString()}'),
@@ -111,9 +130,11 @@ class _StaffRegistrationScreenState extends State<StaffRegistrationScreen> {
         ),
       );
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -152,7 +173,7 @@ class _StaffRegistrationScreenState extends State<StaffRegistrationScreen> {
                   ),
                 ),
                 const SizedBox(height: 32),
-                
+
                 // Name Field
                 _buildTextField(
                   controller: _nameController,
@@ -169,7 +190,7 @@ class _StaffRegistrationScreenState extends State<StaffRegistrationScreen> {
                   },
                 ),
                 const SizedBox(height: 16),
-                
+
                 // Phone Field
                 _buildTextField(
                   controller: _phoneController,
@@ -178,30 +199,33 @@ class _StaffRegistrationScreenState extends State<StaffRegistrationScreen> {
                   keyboardType: TextInputType.phone,
                   inputFormatters: [
                     FilteringTextInputFormatter.digitsOnly,
-                    LengthLimitingTextInputFormatter(10),
+                    AustralianLocalPhoneInputFormatter(),
                   ],
-                  prefix: const Text(
-                    '+91 ',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
+                  hintText: '(04) 1234 5678',
                   validator: (value) {
-                    if (value == null || value.isEmpty) {
+                    final digits =
+                        AustralianPhoneNumber.digitsOnly(value ?? '');
+                    if (digits.isEmpty) {
                       return 'Please enter phone number';
                     }
-                    if (value.length != 10) {
-                      return 'Phone number must be 10 digits';
+                    final prefixError =
+                        AustralianPhoneNumber.validationErrorForDigits(
+                      digits,
+                      internationalMode: false,
+                    );
+                    if (prefixError != null) {
+                      return prefixError;
                     }
-                    if (!RegExp(r'^[6-9]\d{9}$').hasMatch(value)) {
-                      return 'Invalid phone number format';
+                    if (!AustralianPhoneNumber.isValidLocalDigits(digits)) {
+                      return AustralianPhoneNumber.submitErrorMessage(
+                        internationalMode: false,
+                      );
                     }
                     return null;
                   },
                 ),
                 const SizedBox(height: 16),
-                
+
                 // Role Dropdown
                 Container(
                   decoration: BoxDecoration(
@@ -215,7 +239,8 @@ class _StaffRegistrationScreenState extends State<StaffRegistrationScreen> {
                       labelText: 'Role',
                       prefixIcon: Icon(Icons.work),
                       border: InputBorder.none,
-                      contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      contentPadding:
+                          EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     ),
                     items: _roles.map((role) {
                       return DropdownMenuItem(
@@ -237,7 +262,7 @@ class _StaffRegistrationScreenState extends State<StaffRegistrationScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                
+
                 // Department Field (Optional)
                 _buildTextField(
                   controller: _departmentController,
@@ -245,7 +270,7 @@ class _StaffRegistrationScreenState extends State<StaffRegistrationScreen> {
                   icon: Icons.business,
                 ),
                 const SizedBox(height: 16),
-                
+
                 // Email Field (Optional)
                 _buildTextField(
                   controller: _emailController,
@@ -254,7 +279,8 @@ class _StaffRegistrationScreenState extends State<StaffRegistrationScreen> {
                   keyboardType: TextInputType.emailAddress,
                   validator: (value) {
                     if (value != null && value.isNotEmpty) {
-                      if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
+                      if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
+                          .hasMatch(value)) {
                         return 'Invalid email format';
                       }
                     }
@@ -262,10 +288,10 @@ class _StaffRegistrationScreenState extends State<StaffRegistrationScreen> {
                   },
                 ),
                 const SizedBox(height: 24),
-                
+
                 const Divider(),
                 const SizedBox(height: 16),
-                
+
                 const Text(
                   'Login Credentials',
                   style: TextStyle(
@@ -275,7 +301,7 @@ class _StaffRegistrationScreenState extends State<StaffRegistrationScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                
+
                 // PIN Field
                 _buildTextField(
                   controller: _pinController,
@@ -288,7 +314,8 @@ class _StaffRegistrationScreenState extends State<StaffRegistrationScreen> {
                     LengthLimitingTextInputFormatter(6),
                   ],
                   suffixIcon: IconButton(
-                    icon: Icon(_obscurePin ? Icons.visibility : Icons.visibility_off),
+                    icon: Icon(
+                        _obscurePin ? Icons.visibility : Icons.visibility_off),
                     onPressed: () {
                       setState(() {
                         _obscurePin = !_obscurePin;
@@ -306,7 +333,7 @@ class _StaffRegistrationScreenState extends State<StaffRegistrationScreen> {
                   },
                 ),
                 const SizedBox(height: 16),
-                
+
                 // Confirm PIN Field
                 _buildTextField(
                   controller: _confirmPinController,
@@ -319,7 +346,9 @@ class _StaffRegistrationScreenState extends State<StaffRegistrationScreen> {
                     LengthLimitingTextInputFormatter(6),
                   ],
                   suffixIcon: IconButton(
-                    icon: Icon(_obscureConfirmPin ? Icons.visibility : Icons.visibility_off),
+                    icon: Icon(_obscureConfirmPin
+                        ? Icons.visibility
+                        : Icons.visibility_off),
                     onPressed: () {
                       setState(() {
                         _obscureConfirmPin = !_obscureConfirmPin;
@@ -337,7 +366,7 @@ class _StaffRegistrationScreenState extends State<StaffRegistrationScreen> {
                   },
                 ),
                 const SizedBox(height: 32),
-                
+
                 // Create Account Button
                 SizedBox(
                   width: double.infinity,
@@ -383,6 +412,7 @@ class _StaffRegistrationScreenState extends State<StaffRegistrationScreen> {
     required TextEditingController controller,
     required String label,
     required IconData icon,
+    String? hintText,
     bool obscureText = false,
     TextInputType? keyboardType,
     List<TextInputFormatter>? inputFormatters,
@@ -404,11 +434,13 @@ class _StaffRegistrationScreenState extends State<StaffRegistrationScreen> {
         validator: validator,
         decoration: InputDecoration(
           labelText: label,
+          hintText: hintText,
           prefixIcon: Icon(icon),
           suffixIcon: suffixIcon,
           prefix: prefix,
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         ),
       ),
     );

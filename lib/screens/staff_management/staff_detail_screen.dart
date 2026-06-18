@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/staff_provider.dart';
 import '../../models/staff.dart';
+import '../../utils/australian_phone_number.dart';
 import 'edit_staff_screen.dart';
 
 class StaffDetailScreen extends StatefulWidget {
@@ -32,13 +33,13 @@ class _StaffDetailScreenState extends State<StaffDetailScreen> {
       setState(() {
         _staff = staff;
       });
-      
+
       final attendance = await provider.getAttendanceHistory(
         widget.staffId,
         startDate: DateTime.now().subtract(const Duration(days: 30)),
         endDate: DateTime.now(),
       );
-      
+
       setState(() {
         _attendanceHistory = attendance;
       });
@@ -145,7 +146,9 @@ class _StaffDetailScreenState extends State<StaffDetailScreen> {
         ListTile(
           leading: const Icon(Icons.phone),
           title: const Text('Phone'),
-          subtitle: Text(_staff!.phone),
+          subtitle: Text(
+            AustralianPhoneNumber.formatForDisplay(_staff!.phone),
+          ),
         ),
         ListTile(
           leading: const Icon(Icons.work),
@@ -160,7 +163,8 @@ class _StaffDetailScreenState extends State<StaffDetailScreen> {
         ListTile(
           leading: const Icon(Icons.money),
           title: const Text('Salary'),
-          subtitle: Text('A\$${_staff!.salary?.toStringAsFixed(2) ?? '0.00'}/month'),
+          subtitle:
+              Text('A\$${_staff!.salary?.toStringAsFixed(2) ?? '0.00'}/month'),
         ),
       ],
     );
@@ -187,9 +191,12 @@ class _StaffDetailScreenState extends State<StaffDetailScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _buildStatItem('Attendance', '$attendanceRate%', Icons.check_circle, Colors.green),
-                _buildStatItem('Total Hours', totalHours.toString(), Icons.timer, Colors.blue),
-                _buildStatItem('Late Arrivals', '2', Icons.warning, Colors.orange),
+                _buildStatItem('Attendance', '$attendanceRate%',
+                    Icons.check_circle, Colors.green),
+                _buildStatItem('Total Hours', totalHours.toString(),
+                    Icons.timer, Colors.blue),
+                _buildStatItem(
+                    'Late Arrivals', '2', Icons.warning, Colors.orange),
               ],
             ),
           ],
@@ -255,17 +262,16 @@ class _StaffDetailScreenState extends State<StaffDetailScreen> {
       subtitle: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (checkIn != null)
-            Text('Check-in: ${_formatTime(checkIn)}'),
-          if (checkOut != null)
-            Text('Check-out: ${_formatTime(checkOut)}'),
+          if (checkIn != null) Text('Check-in: ${_formatTime(checkIn)}'),
+          if (checkOut != null) Text('Check-out: ${_formatTime(checkOut)}'),
         ],
       ),
       trailing: Text(status),
     );
   }
 
-  Widget _buildStatItem(String label, String value, IconData icon, Color color) {
+  Widget _buildStatItem(
+      String label, String value, IconData icon, Color color) {
     return Column(
       children: [
         Icon(icon, size: 32, color: color),
@@ -287,7 +293,8 @@ class _StaffDetailScreenState extends State<StaffDetailScreen> {
 
   int _calculateAttendanceRate() {
     if (_attendanceHistory.isEmpty) return 0;
-    final presentDays = _attendanceHistory.where((r) => r['status'] == 'Present').length;
+    final presentDays =
+        _attendanceHistory.where((r) => r['status'] == 'Present').length;
     return ((presentDays / _attendanceHistory.length) * 100).round();
   }
 

@@ -171,7 +171,7 @@ class _DesktopNavState extends State<_DesktopNav> with SingleTickerProviderState
                   ) {
                     return destination.type == model.selectedMailboxPage;
                   });
-                  return Container(
+                  return ColoredBox(
                     color: Theme.of(context).navigationRailTheme.backgroundColor,
                     child: SingleChildScrollView(
                       clipBehavior: Clip.antiAlias,

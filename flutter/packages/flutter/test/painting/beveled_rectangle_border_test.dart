@@ -25,7 +25,7 @@ void main() {
     );
     expect(
       const BeveledRectangleBorder().copyWith(side: side, borderRadius: radius),
-      const BeveledRectangleBorder(side: side, borderRadius: radius),
+      const BeveledRectangleBorder(side: side),
     );
 
     expect(
@@ -120,17 +120,12 @@ void main() {
 
   test('BeveledRectangleBorder with StrokeAlign', () {
     const BorderRadius borderRadius = BorderRadius.all(Radius.circular(10));
-    const BeveledRectangleBorder inside = BeveledRectangleBorder(
-      side: BorderSide(width: 10.0),
-      borderRadius: borderRadius,
-    );
+    const BeveledRectangleBorder inside = BeveledRectangleBorder(side: BorderSide(width: 10.0));
     const BeveledRectangleBorder center = BeveledRectangleBorder(
       side: BorderSide(width: 10.0, strokeAlign: BorderSide.strokeAlignCenter),
-      borderRadius: borderRadius,
     );
     const BeveledRectangleBorder outside = BeveledRectangleBorder(
       side: BorderSide(width: 10.0, strokeAlign: BorderSide.strokeAlignOutside),
-      borderRadius: borderRadius,
     );
     expect(inside.dimensions, const EdgeInsets.all(10.0));
     expect(center.dimensions, const EdgeInsets.all(5.0));

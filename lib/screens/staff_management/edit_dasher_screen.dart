@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import 'package:local_auth/local_auth.dart';
@@ -6,10 +7,12 @@ import 'package:crypto/crypto.dart';
 import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import '../../services/manager_service.dart';
+import '../../utils/australian_phone_number.dart';
+import '../../utils/australian_phone_text_input_formatter.dart';
 
 class EditDasherScreen extends StatefulWidget {
   final Map<String, dynamic> dasher;
-  
+
   const EditDasherScreen({super.key, required this.dasher});
 
   @override
@@ -30,18 +33,43 @@ class _EditDasherScreenState extends State<EditDasherScreen> {
 
   bool _isAvailable = true;
   bool _isOnline = false;
-  final List<String> _vehicleTypes = ['Motorcycle', 'Bicycle', 'Car', 'Scooter'];
+  final List<String> _vehicleTypes = [
+    'Motorcycle',
+    'Bicycle',
+    'Car',
+    'Scooter'
+  ];
   String _selectedVehicleType = 'Motorcycle';
-  
+
   // Authentication options
   String _selectedAuthMethod = 'PIN'; // Default to PIN
-  final List<String> _authMethods = ['PIN', 'Fingerprint', 'Face ID'];
   final LocalAuthentication _localAuth = LocalAuthentication();
   bool _isBiometricAvailable = false;
   List<BiometricType> _availableBiometrics = [];
   bool _faceIdEnrolled = false;
   bool _fingerprintEnrolled = false;
   bool _authMethodChanged = false;
+
+  String? _validateRequiredAustralianPhone(String? value) {
+    final digits = AustralianPhoneNumber.digitsOnly(value ?? '');
+    if (digits.isEmpty) {
+      return 'Required';
+    }
+
+    final prefixError = AustralianPhoneNumber.validationErrorForDigits(
+      digits,
+      internationalMode: false,
+    );
+    if (prefixError != null) {
+      return prefixError;
+    }
+
+    if (!AustralianPhoneNumber.isValidLocalDigits(digits)) {
+      return AustralianPhoneNumber.submitErrorMessage(internationalMode: false);
+    }
+
+    return null;
+  }
 
   @override
   void initState() {
@@ -62,8 +90,9 @@ class _EditDasherScreenState extends State<EditDasherScreen> {
 
     try {
       final bool isAvailable = await _localAuth.canCheckBiometrics;
-      final List<BiometricType> availableBiometrics = await _localAuth.getAvailableBiometrics();
-      
+      final List<BiometricType> availableBiometrics =
+          await _localAuth.getAvailableBiometrics();
+
       setState(() {
         _isBiometricAvailable = isAvailable;
         _availableBiometrics = availableBiometrics;
@@ -79,19 +108,26 @@ class _EditDasherScreenState extends State<EditDasherScreen> {
 
   void _populateFields() {
     _nameController.text = widget.dasher['name'] ?? '';
-    _phoneController.text = widget.dasher['phone'] ?? '';
+    _phoneController.text =
+        AustralianPhoneNumber.tryParse(widget.dasher['phone'] ?? '')
+                ?.localDisplay ??
+            (widget.dasher['phone'] ?? '');
     _emailController.text = widget.dasher['email'] ?? '';
     _addressController.text = widget.dasher['address'] ?? '';
     _vehicleNumberController.text = widget.dasher['vehicle_number'] ?? '';
     _licenseNumberController.text = widget.dasher['license_number'] ?? '';
-    _emergencyContactController.text = widget.dasher['emergency_contact'] ?? '';
+    _emergencyContactController.text =
+        AustralianPhoneNumber.tryParse(widget.dasher['emergency_contact'] ?? '')
+                ?.localDisplay ??
+            (widget.dasher['emergency_contact'] ?? '');
     _selectedVehicleType = widget.dasher['vehicle_type'] ?? 'Motorcycle';
     _isAvailable = widget.dasher['isAvailable'] ?? true;
     _isOnline = widget.dasher['isOnline'] ?? false;
-    
+
     // Populate authentication data
     _selectedAuthMethod = widget.dasher['authMethod'] ?? 'PIN';
-    if (widget.dasher['authMethod'] == 'Fingerprint' || widget.dasher['authMethod'] == 'Face ID') {
+    if (widget.dasher['authMethod'] == 'Fingerprint' ||
+        widget.dasher['authMethod'] == 'Face ID') {
       if (widget.dasher['authMethod'] == 'Fingerprint') {
         _fingerprintEnrolled = widget.dasher['biometricEnrolled'] ?? false;
       } else if (widget.dasher['authMethod'] == 'Face ID') {
@@ -140,14 +176,15 @@ class _EditDasherScreenState extends State<EditDasherScreen> {
                 controller: _nameController,
                 label: 'Full Name',
                 icon: Icons.person,
-                validator: (value) => value?.isEmpty ?? true ? 'Required' : null,
+                validator: (value) =>
+                    value?.isEmpty ?? true ? 'Required' : null,
               ),
               _buildTextField(
                 controller: _phoneController,
                 label: 'Phone Number',
                 icon: Icons.phone,
                 keyboardType: TextInputType.phone,
-                validator: (value) => value?.isEmpty ?? true ? 'Required' : null,
+                validator: _validateRequiredAustralianPhone,
               ),
               _buildTextField(
                 controller: _emailController,
@@ -164,9 +201,9 @@ class _EditDasherScreenState extends State<EditDasherScreen> {
                 controller: _addressController,
                 label: 'Address',
                 icon: Icons.location_on,
-                validator: (value) => value?.isEmpty ?? true ? 'Required' : null,
+                validator: (value) =>
+                    value?.isEmpty ?? true ? 'Required' : null,
               ),
-              
               const SizedBox(height: 20),
               _buildSectionHeader('Vehicle Information'),
               _buildDropdownField(),
@@ -174,15 +211,16 @@ class _EditDasherScreenState extends State<EditDasherScreen> {
                 controller: _vehicleNumberController,
                 label: 'Vehicle Number',
                 icon: Icons.directions_car,
-                validator: (value) => value?.isEmpty ?? true ? 'Required' : null,
+                validator: (value) =>
+                    value?.isEmpty ?? true ? 'Required' : null,
               ),
               _buildTextField(
                 controller: _licenseNumberController,
                 label: 'License Number',
                 icon: Icons.credit_card,
-                validator: (value) => value?.isEmpty ?? true ? 'Required' : null,
+                validator: (value) =>
+                    value?.isEmpty ?? true ? 'Required' : null,
               ),
-              
               const SizedBox(height: 20),
               _buildSectionHeader('Emergency Contact'),
               _buildTextField(
@@ -190,30 +228,30 @@ class _EditDasherScreenState extends State<EditDasherScreen> {
                 label: 'Emergency Contact Number',
                 icon: Icons.emergency,
                 keyboardType: TextInputType.phone,
-                validator: (value) => value?.isEmpty ?? true ? 'Required' : null,
+                validator: _validateRequiredAustralianPhone,
               ),
-              
               const SizedBox(height: 20),
               _buildSectionHeader('Security Authentication'),
               _buildAuthenticationSection(),
-              
               const SizedBox(height: 20),
               _buildSectionHeader('Status'),
               SwitchListTile(
                 title: const Text('Available for Deliveries'),
-                subtitle: Text(_isAvailable ? 'Dasher is available' : 'Dasher is not available'),
+                subtitle: Text(_isAvailable
+                    ? 'Dasher is available'
+                    : 'Dasher is not available'),
                 value: _isAvailable,
                 onChanged: (value) => setState(() => _isAvailable = value),
                 activeThumbColor: Colors.green,
               ),
               SwitchListTile(
                 title: const Text('Online Status'),
-                subtitle: Text(_isOnline ? 'Dasher is online' : 'Dasher is offline'),
+                subtitle:
+                    Text(_isOnline ? 'Dasher is online' : 'Dasher is offline'),
                 value: _isOnline,
                 onChanged: (value) => setState(() => _isOnline = value),
                 activeThumbColor: Colors.blue,
               ),
-              
               const SizedBox(height: 20),
               _buildSectionHeader('Statistics'),
               Card(
@@ -224,7 +262,8 @@ class _EditDasherScreenState extends State<EditDasherScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text('Rating:', style: TextStyle(fontWeight: FontWeight.bold)),
+                          const Text('Rating:',
+                              style: TextStyle(fontWeight: FontWeight.bold)),
                           Text('${widget.dasher['rating'] ?? 0}/5.0'),
                         ],
                       ),
@@ -232,7 +271,8 @@ class _EditDasherScreenState extends State<EditDasherScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text('Total Deliveries:', style: TextStyle(fontWeight: FontWeight.bold)),
+                          const Text('Total Deliveries:',
+                              style: TextStyle(fontWeight: FontWeight.bold)),
                           Text('${widget.dasher['totalDeliveries'] ?? 0}'),
                         ],
                       ),
@@ -240,7 +280,8 @@ class _EditDasherScreenState extends State<EditDasherScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text('Total Earnings:', style: TextStyle(fontWeight: FontWeight.bold)),
+                          const Text('Total Earnings:',
+                              style: TextStyle(fontWeight: FontWeight.bold)),
                           Text('A\$${widget.dasher['totalEarnings'] ?? 0}'),
                         ],
                       ),
@@ -248,7 +289,6 @@ class _EditDasherScreenState extends State<EditDasherScreen> {
                   ),
                 ),
               ),
-              
               const SizedBox(height: 30),
               SizedBox(
                 width: double.infinity,
@@ -288,7 +328,7 @@ class _EditDasherScreenState extends State<EditDasherScreen> {
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 12),
-            
+
             // Current authentication method display
             Container(
               padding: const EdgeInsets.all(12),
@@ -315,9 +355,9 @@ class _EditDasherScreenState extends State<EditDasherScreen> {
                 ],
               ),
             ),
-            
+
             const SizedBox(height: 16),
-            
+
             // Authentication method selection for updates
             DropdownButtonFormField<String>(
               initialValue: _selectedAuthMethod,
@@ -343,7 +383,8 @@ class _EditDasherScreenState extends State<EditDasherScreen> {
               onChanged: (String? newValue) {
                 setState(() {
                   _selectedAuthMethod = newValue!;
-                  _authMethodChanged = newValue != (widget.dasher['authMethod'] ?? 'PIN');
+                  _authMethodChanged =
+                      newValue != (widget.dasher['authMethod'] ?? 'PIN');
                   // Reset enrollment status when changing methods
                   _faceIdEnrolled = false;
                   _fingerprintEnrolled = false;
@@ -352,16 +393,19 @@ class _EditDasherScreenState extends State<EditDasherScreen> {
                 });
               },
             ),
-            
+
             const SizedBox(height: 16),
-            
+
             // Show PIN fields if PIN is selected and method changed
-            if (_selectedAuthMethod == 'PIN' && _authMethodChanged) ..._buildPinFields(),
-            
+            if (_selectedAuthMethod == 'PIN' && _authMethodChanged)
+              ..._buildPinFields(),
+
             // Show biometric enrollment buttons if method changed
-            if (_selectedAuthMethod == 'Fingerprint' && _authMethodChanged) ..._buildFingerprintEnrollment(),
-            if (_selectedAuthMethod == 'Face ID' && _authMethodChanged) ..._buildFaceIdEnrollment(),
-            
+            if (_selectedAuthMethod == 'Fingerprint' && _authMethodChanged)
+              ..._buildFingerprintEnrollment(),
+            if (_selectedAuthMethod == 'Face ID' && _authMethodChanged)
+              ..._buildFaceIdEnrollment(),
+
             const SizedBox(height: 12),
             _buildAuthStatusIndicator(),
           ],
@@ -372,7 +416,7 @@ class _EditDasherScreenState extends State<EditDasherScreen> {
 
   List<String> _getAvailableAuthMethods() {
     List<String> methods = ['PIN'];
-    
+
     if (_isBiometricAvailable) {
       if (_availableBiometrics.contains(BiometricType.fingerprint)) {
         methods.add('Fingerprint');
@@ -381,7 +425,7 @@ class _EditDasherScreenState extends State<EditDasherScreen> {
         methods.add('Face ID');
       }
     }
-    
+
     return methods;
   }
 
@@ -411,7 +455,9 @@ class _EditDasherScreenState extends State<EditDasherScreen> {
           if (!_authMethodChanged) return null;
           if (value?.isEmpty ?? true) return 'PIN is required';
           if (value!.length != 4) return 'PIN must be 4 digits';
-          if (!RegExp(r'^[0-9]+\$').hasMatch(value)) return 'PIN must contain only numbers';
+          if (!RegExp(r'^[0-9]+\$').hasMatch(value)) {
+            return 'PIN must contain only numbers';
+          }
           return null;
         },
       ),
@@ -436,8 +482,11 @@ class _EditDasherScreenState extends State<EditDasherScreen> {
     return [
       ElevatedButton.icon(
         onPressed: _enrollFingerprint,
-        icon: Icon(_fingerprintEnrolled ? Icons.check_circle : Icons.fingerprint),
-        label: Text(_fingerprintEnrolled ? 'Fingerprint Enrolled' : 'Enroll Fingerprint'),
+        icon:
+            Icon(_fingerprintEnrolled ? Icons.check_circle : Icons.fingerprint),
+        label: Text(_fingerprintEnrolled
+            ? 'Fingerprint Enrolled'
+            : 'Enroll Fingerprint'),
         style: ElevatedButton.styleFrom(
           backgroundColor: _fingerprintEnrolled ? Colors.green : Colors.blue,
           foregroundColor: Colors.white,
@@ -464,7 +513,7 @@ class _EditDasherScreenState extends State<EditDasherScreen> {
     bool isConfigured = false;
     String statusText = '';
     Color statusColor = Colors.red;
-    
+
     if (!_authMethodChanged) {
       // Show current authentication status
       statusText = 'Current authentication method is configured';
@@ -474,21 +523,26 @@ class _EditDasherScreenState extends State<EditDasherScreen> {
       // Show new authentication status
       switch (_selectedAuthMethod) {
         case 'PIN':
-          isConfigured = _pinController.text.length == 4 && _confirmPinController.text.length == 4;
-          statusText = isConfigured ? 'New PIN configured' : 'New PIN not configured';
+          isConfigured = _pinController.text.length == 4 &&
+              _confirmPinController.text.length == 4;
+          statusText =
+              isConfigured ? 'New PIN configured' : 'New PIN not configured';
           break;
         case 'Fingerprint':
           isConfigured = _fingerprintEnrolled;
-          statusText = isConfigured ? 'Fingerprint enrolled' : 'Fingerprint not enrolled';
+          statusText = isConfigured
+              ? 'Fingerprint enrolled'
+              : 'Fingerprint not enrolled';
           break;
         case 'Face ID':
           isConfigured = _faceIdEnrolled;
-          statusText = isConfigured ? 'Face ID enrolled' : 'Face ID not enrolled';
+          statusText =
+              isConfigured ? 'Face ID enrolled' : 'Face ID not enrolled';
           break;
       }
       statusColor = isConfigured ? Colors.green : Colors.red;
     }
-    
+
     return Row(
       children: [
         Icon(
@@ -508,13 +562,14 @@ class _EditDasherScreenState extends State<EditDasherScreen> {
   Future<void> _enrollFingerprint() async {
     try {
       final bool didAuthenticate = await _localAuth.authenticate(
-        localizedReason: 'Please scan your fingerprint to enroll for dasher authentication',
+        localizedReason:
+            'Please scan your fingerprint to enroll for dasher authentication',
         options: const AuthenticationOptions(
           biometricOnly: true,
           stickyAuth: true,
         ),
       );
-      
+
       if (didAuthenticate) {
         setState(() {
           _fingerprintEnrolled = true;
@@ -533,13 +588,14 @@ class _EditDasherScreenState extends State<EditDasherScreen> {
   Future<void> _enrollFaceId() async {
     try {
       final bool didAuthenticate = await _localAuth.authenticate(
-        localizedReason: 'Please look at the camera to enroll Face ID for dasher authentication',
+        localizedReason:
+            'Please look at the camera to enroll Face ID for dasher authentication',
         options: const AuthenticationOptions(
           biometricOnly: true,
           stickyAuth: true,
         ),
       );
-      
+
       if (didAuthenticate) {
         setState(() {
           _faceIdEnrolled = true;
@@ -592,6 +648,12 @@ class _EditDasherScreenState extends State<EditDasherScreen> {
         validator: validator,
         obscureText: obscureText,
         maxLength: maxLength,
+        inputFormatters: keyboardType == TextInputType.phone
+            ? <TextInputFormatter>[
+                FilteringTextInputFormatter.digitsOnly,
+                AustralianLocalPhoneInputFormatter(),
+              ]
+            : null,
         decoration: InputDecoration(
           labelText: label,
           prefixIcon: Icon(icon),
@@ -642,16 +704,36 @@ class _EditDasherScreenState extends State<EditDasherScreen> {
 
   void _updateDasher() async {
     if (_formKey.currentState?.validate() ?? false) {
+      final normalizedPhone = AustralianPhoneNumber.normalizeToStorageFormat(
+        _phoneController.text,
+      );
+      final normalizedEmergencyContact =
+          AustralianPhoneNumber.normalizeToStorageFormat(
+        _emergencyContactController.text,
+      );
+      if (normalizedPhone == null || normalizedEmergencyContact == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              AustralianPhoneNumber.submitErrorMessage(
+                internationalMode: false,
+              ),
+            ),
+          ),
+        );
+        return;
+      }
+
       // Prepare dasher data
       final dasherData = <String, dynamic>{
         'name': _nameController.text,
-        'phone': _phoneController.text,
+        'phone': normalizedPhone,
         'email': _emailController.text,
         'address': _addressController.text,
         'vehicle_type': _selectedVehicleType,
         'vehicle_number': _vehicleNumberController.text,
         'license_number': _licenseNumberController.text,
-        'emergency_contact': _emergencyContactController.text,
+        'emergency_contact': normalizedEmergencyContact,
         'isAvailable': _isAvailable,
         'isOnline': _isOnline,
       };
@@ -660,10 +742,11 @@ class _EditDasherScreenState extends State<EditDasherScreen> {
       if (_authMethodChanged) {
         bool authConfigured = false;
         Map<String, dynamic> authData = {};
-        
+
         switch (_selectedAuthMethod) {
           case 'PIN':
-            if (_pinController.text.length == 4 && _confirmPinController.text.length == 4) {
+            if (_pinController.text.length == 4 &&
+                _confirmPinController.text.length == 4) {
               authConfigured = true;
               authData = {
                 'authMethod': 'PIN',
@@ -690,14 +773,16 @@ class _EditDasherScreenState extends State<EditDasherScreen> {
             }
             break;
         }
-        
+
         if (!authConfigured) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Please configure \$_selectedAuthMethod authentication')),
+            SnackBar(
+                content: Text(
+                    'Please configure \$_selectedAuthMethod authentication')),
           );
           return;
         }
-        
+
         // Add authentication data to dasher data
         dasherData.addAll(authData);
       }
@@ -705,11 +790,11 @@ class _EditDasherScreenState extends State<EditDasherScreen> {
       try {
         await Provider.of<ManagerService>(context, listen: false)
             .updateDasher(widget.dasher['id'], dasherData);
-        
+
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Dasher updated successfully')),
         );
-        
+
         Navigator.pop(context);
       } catch (e) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -724,7 +809,8 @@ class _EditDasherScreenState extends State<EditDasherScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Dasher'),
-        content: Text('Are you sure you want to delete ${widget.dasher['name']}? This action cannot be undone.'),
+        content: Text(
+            'Are you sure you want to delete ${widget.dasher['name']}? This action cannot be undone.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -746,10 +832,10 @@ class _EditDasherScreenState extends State<EditDasherScreen> {
           .collection('dashers')
           .doc(widget.dasher['id'])
           .delete();
-      
+
       Navigator.pop(context); // Close dialog
       Navigator.pop(context); // Close edit screen
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Dasher deleted successfully')),
       );

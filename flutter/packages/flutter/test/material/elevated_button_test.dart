@@ -18,7 +18,7 @@ void main() {
   }
 
   Color textColor(WidgetTester tester, String text) {
-    return tester.renderObject<RenderParagraph>(find.text(text)).text.style!.color!;
+    return tester.renderObject<RenderParagraph>(find.text(text)).text.style!.color;
   }
 
   testWidgets('ElevatedButton, ElevatedButton.icon defaults', (WidgetTester tester) async {
@@ -1484,7 +1484,7 @@ void main() {
     // This is a regression test for https://github.com/flutter/flutter/issues/387
 
     const ColorScheme colorScheme = ColorScheme.light();
-    final Color backgroundColor = colorScheme.primary;
+    const Color backgroundColor = colorScheme.primary;
     final Color disabledBackgroundColor = colorScheme.onSurface.withOpacity(0.12);
 
     Widget buildFrame({required bool enabled}) {

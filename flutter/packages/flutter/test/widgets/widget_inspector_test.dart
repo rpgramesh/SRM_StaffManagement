@@ -5076,16 +5076,16 @@ class _TestWidgetInspectorService extends TestWidgetInspectorService {
             });
 
         final TestWidgetsFlutterBinding binding = TestWidgetsFlutterBinding.ensureInitialized();
-        final ui.Image screenshotImage = (await binding.runAsync<ui.Image>(() async {
+        final ui.Image screenshotImage = await binding.runAsync<ui.Image>(() async {
           final String base64Screenshot = (await base64ScreenshotFuture)! as String;
           final ui.Codec codec = await ui.instantiateImageCodec(base64.decode(base64Screenshot));
           final ui.FrameInfo frame = await codec.getNextFrame();
           codec.dispose();
           return frame.image;
-        }))!;
+        });
         addTearDown(screenshotImage.dispose);
 
-        await expectLater(screenshotImage, matchesReferenceImage(clipRectScreenshot!));
+        await expectLater(screenshotImage, matchesReferenceImage(clipRectScreenshot));
 
         // Test with a very visible debug paint
         final ui.Image? screenshot10 = await service.screenshot(

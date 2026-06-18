@@ -7,6 +7,7 @@ import '../../widgets/permission_guard.dart';
 import '../../widgets/navigation/staff_bottom_navigation.dart';
 import '../../models/attendance.dart';
 import '../../services/attendance_service.dart';
+import '../../utils/australian_phone_number.dart';
 import '../../utils/attendance_utils.dart';
 import 'daily_roster_content.dart';
 
@@ -141,8 +142,7 @@ class StaffHomeTab extends StatelessWidget {
     return Consumer<StaffProvider>(
       builder: (context, provider, child) {
         // Use single source of truth from StaffProvider
-        final currentStaff =
-            provider.currentStaff ??
+        final currentStaff = provider.currentStaff ??
             (provider.allStaff.isNotEmpty ? provider.allStaff.first : null);
         final isCheckedIn = currentStaff != null
             ? (provider.checkInStatus[currentStaff.id] ?? false)
@@ -289,8 +289,8 @@ class StaffHomeTab extends StatelessWidget {
                                           err.isNotEmpty
                                               ? err
                                               : (isCheckedIn
-                                                    ? 'Checked out successfully'
-                                                    : 'Checked in successfully'),
+                                                  ? 'Checked out successfully'
+                                                  : 'Checked in successfully'),
                                         ),
                                         backgroundColor: err.isNotEmpty
                                             ? Colors.red
@@ -300,9 +300,8 @@ class StaffHomeTab extends StatelessWidget {
                                   }
                                 },
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: isCheckedIn
-                                ? Colors.red
-                                : Colors.green,
+                            backgroundColor:
+                                isCheckedIn ? Colors.red : Colors.green,
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 12),
                           ),
@@ -317,8 +316,8 @@ class StaffHomeTab extends StatelessWidget {
                                         strokeWidth: 2,
                                         valueColor:
                                             AlwaysStoppedAnimation<Color>(
-                                              Colors.white,
-                                            ),
+                                          Colors.white,
+                                        ),
                                       ),
                                     ),
                                     const SizedBox(width: 8),
@@ -634,9 +633,8 @@ class _StaffAttendanceTabState extends State<StaffAttendanceTab> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     final provider = context.read<StaffProvider>();
-    final currentStaff = provider.allStaff.isNotEmpty
-        ? provider.allStaff.first
-        : null;
+    final currentStaff =
+        provider.allStaff.isNotEmpty ? provider.allStaff.first : null;
     if (_currentStaffId == null && currentStaff != null) {
       _currentStaffId = currentStaff.id;
       _fetchWeek();
@@ -679,9 +677,8 @@ class _StaffAttendanceTabState extends State<StaffAttendanceTab> {
   Widget build(BuildContext context) {
     return Consumer<StaffProvider>(
       builder: (context, provider, child) {
-        final currentStaff = provider.allStaff.isNotEmpty
-            ? provider.allStaff.first
-            : null;
+        final currentStaff =
+            provider.allStaff.isNotEmpty ? provider.allStaff.first : null;
         final isCheckedIn = currentStaff != null
             ? (provider.checkInStatus[currentStaff.id] ?? false)
             : false;
@@ -770,8 +767,8 @@ class _StaffAttendanceTabState extends State<StaffAttendanceTab> {
                                           err.isNotEmpty
                                               ? err
                                               : (isCheckedIn
-                                                    ? 'Checked out successfully'
-                                                    : 'Checked in successfully'),
+                                                  ? 'Checked out successfully'
+                                                  : 'Checked in successfully'),
                                         ),
                                         backgroundColor: err.isNotEmpty
                                             ? Colors.red
@@ -781,9 +778,8 @@ class _StaffAttendanceTabState extends State<StaffAttendanceTab> {
                                   }
                                 },
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: isCheckedIn
-                                ? Colors.red
-                                : Colors.green,
+                            backgroundColor:
+                                isCheckedIn ? Colors.red : Colors.green,
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 12),
                           ),
@@ -798,8 +794,8 @@ class _StaffAttendanceTabState extends State<StaffAttendanceTab> {
                                         strokeWidth: 2,
                                         valueColor:
                                             AlwaysStoppedAnimation<Color>(
-                                              Colors.white,
-                                            ),
+                                          Colors.white,
+                                        ),
                                       ),
                                     ),
                                     SizedBox(width: 8),
@@ -877,123 +873,127 @@ class _StaffAttendanceTabState extends State<StaffAttendanceTab> {
                           child: _loading
                               ? const Center(child: CircularProgressIndicator())
                               : _error != null
-                              ? Center(
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(
-                                        Icons.error_outline,
-                                        size: 48,
-                                        color: Colors.grey[400],
-                                      ),
-                                      const SizedBox(height: 8),
-                                      Text(
-                                        _error!,
-                                        style: TextStyle(
-                                          color: Colors.grey[700],
-                                        ),
-                                      ),
-                                      const SizedBox(height: 8),
-                                      ElevatedButton(
-                                        onPressed: _fetchWeek,
-                                        child: const Text('Retry'),
-                                      ),
-                                    ],
-                                  ),
-                                )
-                              : ListView.builder(
-                                  itemCount: 7,
-                                  itemBuilder: (context, index) {
-                                    final day = _weekStart.add(
-                                      Duration(days: index),
-                                    );
-                                    final isToday = DateUtils.isSameDay(
-                                      day,
-                                      DateTime.now(),
-                                    );
-
-                                    // Determine status with rules (future/today/past)
-                                    final status = computeDayStatus(
-                                      day,
-                                      _weekRecords,
-                                    );
-                                    final record = _weekRecords.firstWhere(
-                                      (r) => DateUtils.isSameDay(r.date, day),
-                                      orElse: () => Attendance(
-                                        id: 'none',
-                                        staffId: _currentStaffId ?? '',
-                                        date: day,
-                                        status: '',
-                                        duration: 0.0,
-                                      ),
-                                    );
-
-                                    final isAbsent = status == 'absent';
-                                    final isPresent =
-                                        status != 'future' &&
-                                        status != 'today_no_record' &&
-                                        !isAbsent;
-                                    final subtitle = displayTextForStatus(
-                                      status,
-                                      record: record.id == 'none'
-                                          ? null
-                                          : record,
-                                    );
-
-                                    Color avatarColor;
-                                    IconData avatarIcon;
-                                    Color? subtitleColor;
-
-                                    if (isPresent) {
-                                      avatarColor = Colors.green;
-                                      avatarIcon = Icons.check;
-                                      subtitleColor = Colors.green[700];
-                                    } else if (isAbsent) {
-                                      avatarColor = Colors.red;
-                                      avatarIcon = Icons.close;
-                                      subtitleColor = Colors.red[700];
-                                    } else {
-                                      avatarColor = Colors.grey;
-                                      avatarIcon = Icons.schedule;
-                                      subtitleColor = Colors.grey[700];
-                                    }
-
-                                    return Card(
-                                      margin: const EdgeInsets.only(bottom: 8),
-                                      color: isToday ? Colors.blue[50] : null,
-                                      child: ListTile(
-                                        leading: CircleAvatar(
-                                          backgroundColor: avatarColor,
-                                          child: Icon(
-                                            avatarIcon,
-                                            color: Colors.white,
+                                  ? Center(
+                                      child: Column(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          Icon(
+                                            Icons.error_outline,
+                                            size: 48,
+                                            color: Colors.grey[400],
                                           ),
-                                        ),
-                                        title: Text(
-                                          DateFormat('EEEE, MMM d').format(day),
-                                          style: TextStyle(
-                                            fontWeight: isToday
-                                                ? FontWeight.bold
-                                                : FontWeight.normal,
+                                          const SizedBox(height: 8),
+                                          Text(
+                                            _error!,
+                                            style: TextStyle(
+                                              color: Colors.grey[700],
+                                            ),
                                           ),
-                                        ),
-                                        subtitle: Text(
-                                          subtitle,
-                                          style: TextStyle(
-                                            color: subtitleColor,
+                                          const SizedBox(height: 8),
+                                          ElevatedButton(
+                                            onPressed: _fetchWeek,
+                                            child: const Text('Retry'),
                                           ),
-                                        ),
-                                        trailing: isToday
-                                            ? Chip(
-                                                label: const Text('Today'),
-                                                backgroundColor:
-                                                    Colors.blue[100],
-                                              )
-                                            : null,
+                                        ],
                                       ),
-                                    );
-                                  },
-                                ),
+                                    )
+                                  : ListView.builder(
+                                      itemCount: 7,
+                                      itemBuilder: (context, index) {
+                                        final day = _weekStart.add(
+                                          Duration(days: index),
+                                        );
+                                        final isToday = DateUtils.isSameDay(
+                                          day,
+                                          DateTime.now(),
+                                        );
+
+                                        // Determine status with rules (future/today/past)
+                                        final status = computeDayStatus(
+                                          day,
+                                          _weekRecords,
+                                        );
+                                        final record = _weekRecords.firstWhere(
+                                          (r) =>
+                                              DateUtils.isSameDay(r.date, day),
+                                          orElse: () => Attendance(
+                                            id: 'none',
+                                            staffId: _currentStaffId ?? '',
+                                            date: day,
+                                            status: '',
+                                            duration: 0.0,
+                                          ),
+                                        );
+
+                                        final isAbsent = status == 'absent';
+                                        final isPresent = status != 'future' &&
+                                            status != 'today_no_record' &&
+                                            !isAbsent;
+                                        final subtitle = displayTextForStatus(
+                                          status,
+                                          record: record.id == 'none'
+                                              ? null
+                                              : record,
+                                        );
+
+                                        Color avatarColor;
+                                        IconData avatarIcon;
+                                        Color? subtitleColor;
+
+                                        if (isPresent) {
+                                          avatarColor = Colors.green;
+                                          avatarIcon = Icons.check;
+                                          subtitleColor = Colors.green[700];
+                                        } else if (isAbsent) {
+                                          avatarColor = Colors.red;
+                                          avatarIcon = Icons.close;
+                                          subtitleColor = Colors.red[700];
+                                        } else {
+                                          avatarColor = Colors.grey;
+                                          avatarIcon = Icons.schedule;
+                                          subtitleColor = Colors.grey[700];
+                                        }
+
+                                        return Card(
+                                          margin:
+                                              const EdgeInsets.only(bottom: 8),
+                                          color:
+                                              isToday ? Colors.blue[50] : null,
+                                          child: ListTile(
+                                            leading: CircleAvatar(
+                                              backgroundColor: avatarColor,
+                                              child: Icon(
+                                                avatarIcon,
+                                                color: Colors.white,
+                                              ),
+                                            ),
+                                            title: Text(
+                                              DateFormat('EEEE, MMM d')
+                                                  .format(day),
+                                              style: TextStyle(
+                                                fontWeight: isToday
+                                                    ? FontWeight.bold
+                                                    : FontWeight.normal,
+                                              ),
+                                            ),
+                                            subtitle: Text(
+                                              subtitle,
+                                              style: TextStyle(
+                                                color: subtitleColor,
+                                              ),
+                                            ),
+                                            trailing: isToday
+                                                ? Chip(
+                                                    label: const Text('Today'),
+                                                    backgroundColor:
+                                                        Colors.blue[100],
+                                                  )
+                                                : null,
+                                          ),
+                                        );
+                                      },
+                                    ),
                         ),
                       ],
                     ),
@@ -1067,9 +1067,8 @@ class StaffScheduleTab extends StatelessWidget {
                   color: isToday ? Colors.blue[50] : null,
                   child: ListTile(
                     leading: CircleAvatar(
-                      backgroundColor: hasShift
-                          ? Colors.blue[700]
-                          : Colors.grey,
+                      backgroundColor:
+                          hasShift ? Colors.blue[700] : Colors.grey,
                       child: Text(
                         DateFormat('d').format(date),
                         style: const TextStyle(
@@ -1081,9 +1080,8 @@ class StaffScheduleTab extends StatelessWidget {
                     title: Text(
                       DateFormat('EEEE, MMM d').format(date),
                       style: TextStyle(
-                        fontWeight: isToday
-                            ? FontWeight.bold
-                            : FontWeight.normal,
+                        fontWeight:
+                            isToday ? FontWeight.bold : FontWeight.normal,
                       ),
                     ),
                     subtitle: Text(
@@ -1131,9 +1129,8 @@ class StaffProfileTab extends StatelessWidget {
       builder: (context, provider, child) {
         // For now, we'll use the first staff member as current staff
         // In a real app, this would be determined by authentication
-        final currentStaff = provider.allStaff.isNotEmpty
-            ? provider.allStaff.first
-            : null;
+        final currentStaff =
+            provider.allStaff.isNotEmpty ? provider.allStaff.first : null;
 
         return SingleChildScrollView(
           padding: const EdgeInsets.all(16),
@@ -1208,7 +1205,10 @@ class StaffProfileTab extends StatelessWidget {
                     children: [
                       _buildInfoRow(
                         'Phone Number',
-                        currentStaff?.phone ?? 'Not provided',
+                        AustralianPhoneNumber.formatForDisplay(
+                          currentStaff?.phone,
+                          emptyFallback: 'Not provided',
+                        ),
                       ),
                       const Divider(),
                       _buildInfoRow(
@@ -1618,10 +1618,9 @@ class _LiveWorkTimerState extends State<_LiveWorkTimer> {
         // Discrepancy check: only when a checkout exists
         final expectedMinutes =
             (a.checkInTime != null && a.checkOutTime != null)
-            ? exactMinutesBetween(a.checkInTime!, a.checkOutTime!)
-            : null;
-        final hasDiscrepancy =
-            expectedMinutes != null &&
+                ? exactMinutesBetween(a.checkInTime!, a.checkOutTime!)
+                : null;
+        final hasDiscrepancy = expectedMinutes != null &&
             (expectedMinutes - elapsedMinutes).abs() > 1;
 
         // From home chip based on geofence flag (if available)
@@ -1649,8 +1648,8 @@ class _LiveWorkTimerState extends State<_LiveWorkTimer> {
               progress < 0.75
                   ? 'Keep going toward ${widget.standardHours}h'
                   : (progress < 1.0
-                        ? 'Approaching ${widget.standardHours}h'
-                        : 'Exceeded ${widget.standardHours}h'),
+                      ? 'Approaching ${widget.standardHours}h'
+                      : 'Exceeded ${widget.standardHours}h'),
               style: TextStyle(fontSize: 12, color: Colors.grey[700]),
             ),
             const SizedBox(height: 8),

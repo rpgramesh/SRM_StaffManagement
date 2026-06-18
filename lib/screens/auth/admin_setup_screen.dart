@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
 import '../../services/auth_service.dart';
 import '../../const/colors.dart';
+import '../../utils/australian_phone_number.dart';
+import '../../utils/australian_phone_text_input_formatter.dart';
 import '../staff_management_app_screen.dart';
 
 class AdminSetupScreen extends StatefulWidget {
@@ -16,7 +20,7 @@ class _AdminSetupScreenState extends State<AdminSetupScreen> {
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _pinController = TextEditingController();
   final TextEditingController _confirmPinController = TextEditingController();
-  
+
   bool _isLoading = false;
   String _errorMessage = '';
 
@@ -29,13 +33,24 @@ class _AdminSetupScreenState extends State<AdminSetupScreen> {
     super.dispose();
   }
 
-  String? _validatePin(String? value) {
-    if (value == null || value.trim().isEmpty) {
-      return 'Please enter a PIN';
+  String? _validateAustralianPhone(String? value) {
+    final digits = AustralianPhoneNumber.digitsOnly(value ?? '');
+    if (digits.isEmpty) {
+      return 'Please enter phone number';
     }
-    if (!RegExp(r'^\d{6}$').hasMatch(value.trim())) {
-      return 'PIN must be exactly 6 digits';
+
+    final prefixError = AustralianPhoneNumber.validationErrorForDigits(
+      digits,
+      internationalMode: false,
+    );
+    if (prefixError != null) {
+      return prefixError;
     }
+
+    if (!AustralianPhoneNumber.isValidLocalDigits(digits)) {
+      return AustralianPhoneNumber.submitErrorMessage(internationalMode: false);
+    }
+
     return null;
   }
 
@@ -50,6 +65,14 @@ class _AdminSetupScreenState extends State<AdminSetupScreen> {
     if (_phoneController.text.trim().isEmpty) {
       setState(() {
         _errorMessage = 'Please enter phone number';
+      });
+      return;
+    }
+
+    final phoneValidation = _validateAustralianPhone(_phoneController.text);
+    if (phoneValidation != null) {
+      setState(() {
+        _errorMessage = phoneValidation;
       });
       return;
     }
@@ -74,8 +97,18 @@ class _AdminSetupScreenState extends State<AdminSetupScreen> {
     });
 
     try {
+      final normalizedPhone =
+          AustralianPhoneNumber.normalizeToStorageFormat(_phoneController.text);
+      if (normalizedPhone == null) {
+        setState(() {
+          _errorMessage = AustralianPhoneNumber.submitErrorMessage(
+              internationalMode: false);
+        });
+        return;
+      }
+
       final success = await _authService.createInitialAdmin(
-        phoneNumber: _phoneController.text.trim(),
+        phoneNumber: normalizedPhone,
         pin: _pinController.text.trim(),
         name: _nameController.text.trim(),
       );
@@ -118,7 +151,7 @@ class _AdminSetupScreenState extends State<AdminSetupScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 40),
-              
+
               // Header
               const Text(
                 'Setup Admin Account',
@@ -161,9 +194,13 @@ class _AdminSetupScreenState extends State<AdminSetupScreen> {
                       TextField(
                         controller: _phoneController,
                         keyboardType: TextInputType.phone,
+                        inputFormatters: <TextInputFormatter>[
+                          FilteringTextInputFormatter.digitsOnly,
+                          AustralianLocalPhoneInputFormatter(),
+                        ],
                         decoration: InputDecoration(
                           labelText: 'Phone Number',
-                          hintText: 'Enter phone number',
+                          hintText: '(04) 1234 5678',
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
@@ -219,7 +256,8 @@ class _AdminSetupScreenState extends State<AdminSetupScreen> {
                           ),
                           child: Row(
                             children: [
-                              Icon(Icons.error_outline, color: Colors.red.shade600),
+                              Icon(Icons.error_outline,
+                                  color: Colors.red.shade600),
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
@@ -252,7 +290,8 @@ class _AdminSetupScreenState extends State<AdminSetupScreen> {
                                   width: 20,
                                   child: CircularProgressIndicator(
                                     strokeWidth: 2,
-                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                        Colors.white),
                                   ),
                                 )
                               : const Text(

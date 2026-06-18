@@ -1812,7 +1812,7 @@ void main() {
     expect(material.color, Colors.transparent);
     expect(material.elevation, 0.0);
     expect(material.shadowColor, Colors.transparent);
-    expect(material.shape, StadiumBorder(side: BorderSide(color: colorScheme.outline)));
+    expect(material.shape, const StadiumBorder(side: BorderSide(color: colorScheme.outline)));
     expect(material.textStyle, null);
     expect(material.type, MaterialType.button);
 
@@ -1838,7 +1838,7 @@ void main() {
     expect(material.color, Colors.transparent);
     expect(material.elevation, 0.0);
     expect(material.shadowColor, Colors.transparent);
-    expect(material.shape, StadiumBorder(side: BorderSide(color: colorScheme.outline)));
+    expect(material.shape, const StadiumBorder(side: BorderSide(color: colorScheme.outline)));
     expect(material.textStyle, null);
     expect(material.type, MaterialType.button);
 
@@ -2015,7 +2015,7 @@ void main() {
     expect(material.color, Colors.transparent);
     expect(material.elevation, 0.0);
     expect(material.shadowColor, Colors.transparent);
-    expect(material.shape, StadiumBorder(side: BorderSide(color: colorScheme.outline)));
+    expect(material.shape, const StadiumBorder(side: BorderSide(color: colorScheme.outline)));
     expect(material.textStyle, null);
     expect(material.type, MaterialType.button);
     expect(iconColor(), colorScheme.onSurfaceVariant);

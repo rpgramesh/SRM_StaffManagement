@@ -1,8 +1,35 @@
+import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:http/http.dart' as http;
 import '../models/attendance.dart';
 import 'auth_service.dart';
 // TODO: Add geolocator dependency to pubspec.yaml
 // import 'package:geolocator/geolocator.dart';
+
+// #region debug-point A:reporter
+Future<void> _dbgAttendance(String hypothesisId, String location, String msg,
+    [Map<String, dynamic>? data]) async {
+  try {
+    const url = 'http://127.0.0.1:7777/event';
+    const sessionId = 'firestore-write-failure';
+    await http
+        .post(Uri.parse(url),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'sessionId': sessionId,
+              'runId': 'pre-fix',
+              'hypothesisId': hypothesisId,
+              'location': location,
+              'msg': msg,
+              'data': data ?? <String, dynamic>{},
+              'ts': DateTime.now().millisecondsSinceEpoch,
+            }))
+        .timeout(const Duration(seconds: 1));
+  } catch (_) {}
+}
+// #endregion
 
 class AttendanceService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -16,10 +43,28 @@ class AttendanceService {
   // Estimate server time offset to account for client clock drift and latency
   static Future<Duration> estimateServerOffset() async {
     try {
+      // #region debug-point E:time-sync-entry
+      _dbgAttendance(
+          'E',
+          'lib/services/attendance_service.dart:estimateServerOffset',
+          '[DEBUG] estimateServerOffset entered', {
+        'projectId': Firebase.app().options.projectId,
+        'authUid': FirebaseAuth.instance.currentUser?.uid,
+      });
+      // #endregion
       final localBefore = DateTime.now().toUtc();
       final docRef = await _firestore.collection('time_sync').add({
         'createdAt': FieldValue.serverTimestamp(),
       });
+      // #region debug-point E:time-sync-success
+      _dbgAttendance(
+          'E',
+          'lib/services/attendance_service.dart:estimateServerOffset',
+          '[DEBUG] estimateServerOffset wrote time_sync', {
+        'docId': docRef.id,
+        'authUid': FirebaseAuth.instance.currentUser?.uid,
+      });
+      // #endregion
       final snap = await docRef.get();
       final localAfter = DateTime.now().toUtc();
       final serverTs = (snap.data()?['createdAt'] as Timestamp?);
@@ -33,7 +78,17 @@ class AttendanceService {
       );
       final serverTime = serverTs.toDate().toUtc();
       return serverTime.difference(localMid);
-    } catch (_) {
+    } catch (e) {
+      // #region debug-point E:time-sync-error
+      _dbgAttendance(
+          'E',
+          'lib/services/attendance_service.dart:estimateServerOffset',
+          '[DEBUG] estimateServerOffset failed', {
+        'authUid': FirebaseAuth.instance.currentUser?.uid,
+        'error': e.toString(),
+        'firebaseCode': e is FirebaseException ? e.code : null,
+      });
+      // #endregion
       return Duration.zero;
     }
   }
@@ -42,6 +97,15 @@ class AttendanceService {
   static Future<Map<String, dynamic>> checkIn(String staffId,
       {bool skipLocationCheck = false}) async {
     try {
+      // #region debug-point A:attendance-checkin-entry
+      _dbgAttendance('A', 'lib/services/attendance_service.dart:checkIn',
+          '[DEBUG] AttendanceService.checkIn entered', {
+        'projectId': Firebase.app().options.projectId,
+        'authUid': FirebaseAuth.instance.currentUser?.uid,
+        'staffId': staffId,
+        'skipLocationCheck': skipLocationCheck,
+      });
+      // #endregion
       final now = DateTime.now();
       final dateKey = _getDateKey(now);
 
@@ -88,6 +152,15 @@ class AttendanceService {
       final docRef =
           await _firestore.collection(_collection).add(attendanceData);
 
+      // #region debug-point A:attendance-checkin-success
+      _dbgAttendance('A', 'lib/services/attendance_service.dart:checkIn',
+          '[DEBUG] AttendanceService.checkIn wrote attendance', {
+        'docId': docRef.id,
+        'authUid': FirebaseAuth.instance.currentUser?.uid,
+        'staffId': staffId,
+      });
+      // #endregion
+
       return {
         'success': true,
         'message': 'Successfully checked in',
@@ -95,6 +168,15 @@ class AttendanceService {
         'checkInTime': now,
       };
     } catch (e) {
+      // #region debug-point A:attendance-checkin-error
+      _dbgAttendance('A', 'lib/services/attendance_service.dart:checkIn',
+          '[DEBUG] AttendanceService.checkIn failed', {
+        'authUid': FirebaseAuth.instance.currentUser?.uid,
+        'staffId': staffId,
+        'error': e.toString(),
+        'firebaseCode': e is FirebaseException ? e.code : null,
+      });
+      // #endregion
       print('Error checking in: $e');
       return {
         'success': false,
@@ -421,13 +503,15 @@ class AttendanceService {
 
     final records = await getAttendanceByDateRange(staffId, startDate, endDate);
     final buffer = StringBuffer();
-    buffer.writeln('id,staffId,date,checkInTime,checkOutTime,duration,status,notes');
+    buffer.writeln(
+        'id,staffId,date,checkInTime,checkOutTime,duration,status,notes');
     for (final a in records) {
       final dateStr = a.date.toIso8601String();
       final ci = a.checkInTime?.toIso8601String() ?? '';
       final co = a.checkOutTime?.toIso8601String() ?? '';
       final notes = (a.notes ?? '').replaceAll(',', ';');
-      buffer.writeln('${a.id},${a.staffId},$dateStr,$ci,$co,${a.duration},${a.status},$notes');
+      buffer.writeln(
+          '${a.id},${a.staffId},$dateStr,$ci,$co,${a.duration},${a.status},$notes');
     }
     return buffer.toString();
   }
@@ -477,7 +561,8 @@ class AttendanceService {
           'staffId': staffId,
           'date': Timestamp.fromDate(DateTime(date.year, date.month, date.day)),
           'checkInTime': checkIn != null ? Timestamp.fromDate(checkIn) : null,
-          'checkOutTime': checkOut != null ? Timestamp.fromDate(checkOut) : null,
+          'checkOutTime':
+              checkOut != null ? Timestamp.fromDate(checkOut) : null,
           'duration': duration,
           'status': status,
           'notes': notes,
@@ -485,7 +570,10 @@ class AttendanceService {
         };
 
         if (overwrite && id.isNotEmpty) {
-          await _firestore.collection(_collection).doc(id).set(data, SetOptions(merge: true));
+          await _firestore
+              .collection(_collection)
+              .doc(id)
+              .set(data, SetOptions(merge: true));
         } else {
           await _firestore.collection(_collection).add(data);
         }

@@ -56,10 +56,6 @@ class AdminBottomNavigation extends StatelessWidget {
             icon: Icon(Icons.assessment),
             label: 'Reports',
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.settings),
-            label: 'Settings',
-          ),
         ],
       ),
     );
@@ -79,9 +75,6 @@ class AdminBottomNavigation extends StatelessWidget {
         break;
       case 3:
         Navigator.pushNamed(context, '/reports');
-        break;
-      case 4:
-        Navigator.pushNamed(context, '/admin-settings');
         break;
     }
   }

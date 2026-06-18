@@ -48,7 +48,7 @@ void main() {
 
     expect(material.shape, isInstanceOf<StadiumBorder>());
     final StadiumBorder materialShape = material.shape! as StadiumBorder;
-    expect(materialShape.side, BorderSide(color: colorScheme.outline));
+    expect(materialShape.side, const BorderSide(color: colorScheme.outline));
 
     expect(material.textStyle!.color, colorScheme.primary);
     expect(material.textStyle!.fontFamily, 'Roboto');

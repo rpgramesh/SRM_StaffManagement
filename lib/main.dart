@@ -1,5 +1,8 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import 'firebase_options.dart';
 import 'services/staff_service.dart';
@@ -18,15 +21,39 @@ import 'screens/staff/update_profile_screen.dart';
 import 'screens/staff/request_leave_screen.dart';
 import 'services/auth_service.dart';
 import 'services/schedule_service.dart';
+import 'utils/australian_phone_number.dart';
 import 'screens/staff/daily_roster_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+// #region debug-point A:reporter
+Future<void> _dbgMain(String hypothesisId, String location, String msg,
+    [Map<String, dynamic>? data]) async {
+  try {
+    const url = 'http://127.0.0.1:7777/event';
+    const sessionId = 'firestore-write-failure';
+    await http
+        .post(Uri.parse(url),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'sessionId': sessionId,
+              'runId': 'pre-fix',
+              'hypothesisId': hypothesisId,
+              'location': location,
+              'msg': msg,
+              'data': data ?? <String, dynamic>{},
+              'ts': DateTime.now().millisecondsSinceEpoch,
+            }))
+        .timeout(const Duration(seconds: 1));
+  } catch (_) {}
+}
+// #endregion
 
 // Route guard wrapper for admin-only routes
 class GuardedAdminRoute extends StatelessWidget {
   final Widget child;
-  
+
   const GuardedAdminRoute({super.key, required this.child});
-  
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<String?>(
@@ -37,12 +64,12 @@ class GuardedAdminRoute extends StatelessWidget {
             body: Center(child: CircularProgressIndicator()),
           );
         }
-        
+
         final userRole = snapshot.data ?? 'staff';
         if (userRole == 'admin') {
           return child;
         }
-        
+
         return const Scaffold(
           body: Center(
             child: Column(
@@ -50,9 +77,12 @@ class GuardedAdminRoute extends StatelessWidget {
               children: [
                 Icon(Icons.lock, size: 64, color: Colors.red),
                 SizedBox(height: 16),
-                Text('Access Denied', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                Text('Access Denied',
+                    style:
+                        TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
                 SizedBox(height: 8),
-                Text('You do not have permission to access this page.', textAlign: TextAlign.center),
+                Text('You do not have permission to access this page.',
+                    textAlign: TextAlign.center),
               ],
             ),
           ),
@@ -65,12 +95,12 @@ class GuardedAdminRoute extends StatelessWidget {
 // Route guard wrapper for staff-only routes
 class GuardedStaffRoute extends StatelessWidget {
   final Widget child;
-  
+
   const GuardedStaffRoute({super.key, required this.child});
-  
+
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<String?> (
+    return FutureBuilder<String?>(
       future: AuthService().getCurrentUserRole(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -78,11 +108,17 @@ class GuardedStaffRoute extends StatelessWidget {
             body: Center(child: CircularProgressIndicator()),
           );
         }
-        
+
         final userRole = (snapshot.data ?? 'staff').toLowerCase().trim();
         const allowedStaffRoles = [
-          'staff', 'employee', 'waiter', 'cook', 'cashier', 'supervisor',
-          'admin', 'manager',
+          'staff',
+          'employee',
+          'waiter',
+          'cook',
+          'cashier',
+          'supervisor',
+          'admin',
+          'manager',
         ];
         if (allowedStaffRoles.contains(userRole)) {
           return Stack(
@@ -92,7 +128,8 @@ class GuardedStaffRoute extends StatelessWidget {
                 top: 8,
                 right: 8,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
                     color: Colors.black54,
                     borderRadius: BorderRadius.circular(6),
@@ -106,7 +143,7 @@ class GuardedStaffRoute extends StatelessWidget {
             ],
           );
         }
-        
+
         return const Scaffold(
           body: Center(
             child: Column(
@@ -114,9 +151,12 @@ class GuardedStaffRoute extends StatelessWidget {
               children: [
                 Icon(Icons.lock, size: 64, color: Colors.red),
                 SizedBox(height: 16),
-                Text('Access Denied', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                Text('Access Denied',
+                    style:
+                        TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
                 SizedBox(height: 8),
-                Text('You do not have permission to access this page.', textAlign: TextAlign.center),
+                Text('You do not have permission to access this page.',
+                    textAlign: TextAlign.center),
               ],
             ),
           ),
@@ -142,12 +182,12 @@ class GuardedAdminOrManagerRoute extends StatelessWidget {
             body: Center(child: CircularProgressIndicator()),
           );
         }
-        
+
         final userRole = (snapshot.data ?? 'staff').toLowerCase();
         if (userRole == 'admin' || userRole == 'manager') {
           return child;
         }
-        
+
         return const Scaffold(
           body: Center(
             child: Column(
@@ -155,9 +195,12 @@ class GuardedAdminOrManagerRoute extends StatelessWidget {
               children: [
                 Icon(Icons.lock, size: 64, color: Colors.red),
                 SizedBox(height: 16),
-                Text('Access Denied', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                Text('Access Denied',
+                    style:
+                        TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
                 SizedBox(height: 8),
-                Text('You do not have permission to access this page.', textAlign: TextAlign.center),
+                Text('You do not have permission to access this page.',
+                    textAlign: TextAlign.center),
               ],
             ),
           ),
@@ -175,7 +218,20 @@ void main() async {
       await Firebase.initializeApp(
         options: DefaultFirebaseOptions.currentPlatform,
       );
+      // #region debug-point B:firebase-init-success
+      _dbgMain('B', 'lib/main.dart:main', '[DEBUG] Firebase initialized', {
+        'projectId': DefaultFirebaseOptions.currentPlatform.projectId,
+        'appName': Firebase.app().name,
+        'authUid': FirebaseAuth.instance.currentUser?.uid,
+      });
+      // #endregion
     } catch (e) {
+      // #region debug-point B:firebase-init-failure
+      _dbgMain('B', 'lib/main.dart:main', '[DEBUG] Firebase init failed', {
+        'projectId': DefaultFirebaseOptions.currentPlatform.projectId,
+        'error': e.toString(),
+      });
+      // #endregion
       // Ignore duplicate-app error if Firebase is already initialized
     }
   }
@@ -198,53 +254,71 @@ class StaffManagementApp extends StatelessWidget {
         home: const InitialSetupWrapper(),
         routes: {
           '/dashboard': (context) => const RoleBasedDashboard(),
-          '/admin-dashboard': (context) => const GuardedAdminRoute(child: StaffManagementAppScreen()),
-          '/staff-list': (context) => const GuardedStaffRoute(child: StaffListScreen()),
-          '/add-staff': (context) => const GuardedAdminOrManagerRoute(child: AddStaffScreen()),
-          '/reports': (context) => const GuardedAdminRoute(child: StaffReportsScreen()),
-          '/schedule': (context) => const GuardedAdminRoute(child: ScheduleScreen()),
-          '/staff-registration': (context) => const GuardedAdminRoute(child: StaffRegistrationScreen()),
-          '/staff-attendance': (context) => const GuardedStaffRoute(child: StaffAttendanceScreen()),
-          '/staff-main': (context) => const GuardedStaffRoute(child: StaffMainNavigation()),
+          '/admin-dashboard': (context) =>
+              const GuardedAdminRoute(child: StaffManagementAppScreen()),
+          '/staff-list': (context) =>
+              const GuardedStaffRoute(child: StaffListScreen()),
+          '/add-staff': (context) =>
+              const GuardedAdminOrManagerRoute(child: AddStaffScreen()),
+          '/reports': (context) =>
+              const GuardedAdminRoute(child: StaffReportsScreen()),
+          '/schedule': (context) =>
+              const GuardedAdminRoute(child: ScheduleScreen()),
+          '/staff-registration': (context) =>
+              const GuardedAdminRoute(child: StaffRegistrationScreen()),
+          '/staff-attendance': (context) =>
+              const GuardedStaffRoute(child: StaffAttendanceScreen()),
+          '/staff-main': (context) =>
+              const GuardedStaffRoute(child: StaffMainNavigation()),
           '/staff_auth': (context) => const StaffAuthScreen(),
-          '/staff_dashboard': (context) => const GuardedStaffRoute(child: StaffDashboardScreen()),
-          '/weekly_schedule': (context) => const GuardedStaffRoute(child: ViewScheduleScreen()),
-          '/daily_roster': (context) => const GuardedStaffRoute(child: DailyRosterScreen()),
-          '/staff-profile': (context) => const GuardedStaffRoute(child: StaffManagementAppScreen()),
+          '/staff_dashboard': (context) =>
+              const GuardedStaffRoute(child: StaffDashboardScreen()),
+          '/weekly_schedule': (context) =>
+              const GuardedStaffRoute(child: ViewScheduleScreen()),
+          '/daily_roster': (context) =>
+              const GuardedStaffRoute(child: DailyRosterScreen()),
+          '/staff-profile': (context) =>
+              const GuardedStaffRoute(child: StaffManagementAppScreen()),
           '/update_profile': (context) => GuardedStaffRoute(
-            child: Builder(
-              builder: (context) {
-                // Get current staff from provider or auth service
-                final staffProvider = Provider.of<StaffProvider>(context, listen: false);
-                final currentStaff = staffProvider.allStaff.isNotEmpty ? staffProvider.allStaff.first : null;
-                if (currentStaff != null) {
-                  return UpdateProfileScreen(staff: currentStaff);
-                }
-                return const Scaffold(
-                  body: Center(
-                    child: Text('Staff profile not found'),
-                  ),
-                );
-              },
-            ),
-          ),
+                child: Builder(
+                  builder: (context) {
+                    // Get current staff from provider or auth service
+                    final staffProvider =
+                        Provider.of<StaffProvider>(context, listen: false);
+                    final currentStaff = staffProvider.allStaff.isNotEmpty
+                        ? staffProvider.allStaff.first
+                        : null;
+                    if (currentStaff != null) {
+                      return UpdateProfileScreen(staff: currentStaff);
+                    }
+                    return const Scaffold(
+                      body: Center(
+                        child: Text('Staff profile not found'),
+                      ),
+                    );
+                  },
+                ),
+              ),
           '/request_leave': (context) => GuardedStaffRoute(
-            child: Builder(
-              builder: (context) {
-                // Get current staff from provider or auth service
-                final staffProvider = Provider.of<StaffProvider>(context, listen: false);
-                final currentStaff = staffProvider.allStaff.isNotEmpty ? staffProvider.allStaff.first : null;
-                if (currentStaff != null) {
-                  return RequestLeaveScreen(staffId: currentStaff.id);
-                }
-                return const Scaffold(
-                  body: Center(
-                    child: Text('Staff profile not found'),
-                  ),
-                );
-              },
-            ),
-          ),
+                child: Builder(
+                  builder: (context) {
+                    // Get current staff from provider or auth service
+                    final staffProvider =
+                        Provider.of<StaffProvider>(context, listen: false);
+                    final currentStaff = staffProvider.allStaff.isNotEmpty
+                        ? staffProvider.allStaff.first
+                        : null;
+                    if (currentStaff != null) {
+                      return RequestLeaveScreen(staffId: currentStaff.id);
+                    }
+                    return const Scaffold(
+                      body: Center(
+                        child: Text('Staff profile not found'),
+                      ),
+                    );
+                  },
+                ),
+              ),
         },
       ),
     );
@@ -259,17 +333,18 @@ class ScheduleScreen extends StatefulWidget {
   State<ScheduleScreen> createState() => _ScheduleScreenState();
 }
 
-class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStateMixin {
+class _ScheduleScreenState extends State<ScheduleScreen>
+    with TickerProviderStateMixin {
   late TabController _tabController;
   DateTime _selectedDate = DateTime.now();
   String _selectedView = 'weekly';
   final StaffService _staffService = StaffService();
-  
+
   // Staff filtering and availability state
   final String _selectedRoleFilter = 'All Roles';
   final String _selectedDepartmentFilter = 'All Departments';
   final Map<String, bool> _staffAvailability = {};
-  
+
   // Bulk operations state
   bool _isMultiSelectMode = false;
   final Set<String> _selectedShiftIds = <String>{};
@@ -331,7 +406,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
             itemBuilder: (context) => [
               const PopupMenuItem(value: 'daily', child: Text('Daily View')),
               const PopupMenuItem(value: 'weekly', child: Text('Weekly View')),
-              const PopupMenuItem(value: 'monthly', child: Text('Monthly View')),
+              const PopupMenuItem(
+                  value: 'monthly', child: Text('Monthly View')),
               const PopupMenuDivider(),
               const PopupMenuItem(
                 value: 'export',
@@ -392,7 +468,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
                 _selectedView == 'weekly'
                     ? 'Week of ${_formatDate(_selectedDate)}'
                     : '${_getMonthName(_selectedDate.month)} ${_selectedDate.year}',
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                style:
+                    const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
               IconButton(
                 onPressed: () {
@@ -407,23 +484,26 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
             ],
           ),
         ),
-        
+
         // Calendar Grid
         Expanded(
-          child: _selectedView == 'weekly' ? _buildWeeklyView() : _buildMonthlyView(),
+          child: _selectedView == 'weekly'
+              ? _buildWeeklyView()
+              : _buildMonthlyView(),
         ),
       ],
     );
   }
 
   Widget _buildWeeklyView() {
-    final startOfWeek = _selectedDate.subtract(Duration(days: _selectedDate.weekday - 1));
-    
+    final startOfWeek =
+        _selectedDate.subtract(Duration(days: _selectedDate.weekday - 1));
+
     return StreamBuilder<List<Staff>>(
       stream: _staffService.getAllStaff(),
       builder: (context, snapshot) {
         final staffList = snapshot.data ?? [];
-        
+
         return Column(
           children: [
             // Week Navigation
@@ -435,19 +515,22 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
                   IconButton(
                     onPressed: () {
                       setState(() {
-                        _selectedDate = _selectedDate.subtract(const Duration(days: 7));
+                        _selectedDate =
+                            _selectedDate.subtract(const Duration(days: 7));
                       });
                     },
                     icon: const Icon(Icons.chevron_left),
                   ),
                   Text(
                     '${_getMonthName(startOfWeek.month)} ${startOfWeek.day} - ${_getMonthName(startOfWeek.add(const Duration(days: 6)).month)} ${startOfWeek.add(const Duration(days: 6)).day}, ${startOfWeek.year}',
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   IconButton(
                     onPressed: () {
                       setState(() {
-                        _selectedDate = _selectedDate.add(const Duration(days: 7));
+                        _selectedDate =
+                            _selectedDate.add(const Duration(days: 7));
                       });
                     },
                     icon: const Icon(Icons.chevron_right),
@@ -455,7 +538,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
                 ],
               ),
             ),
-            
+
             // Week Summary Cards
             Container(
               height: 100,
@@ -491,9 +574,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
                 ],
               ),
             ),
-            
+
             const SizedBox(height: 16),
-            
+
             // Week Header with Days
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -502,9 +585,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
                   const SizedBox(width: 120), // Space for staff names
                   ...List.generate(7, (index) {
                     final date = startOfWeek.add(Duration(days: index));
-                    final isToday = date.day == DateTime.now().day && 
-                                   date.month == DateTime.now().month && 
-                                   date.year == DateTime.now().year;
+                    final isToday = date.day == DateTime.now().day &&
+                        date.month == DateTime.now().month &&
+                        date.year == DateTime.now().year;
                     return Expanded(
                       child: Container(
                         padding: const EdgeInsets.symmetric(vertical: 12),
@@ -512,7 +595,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
                         decoration: BoxDecoration(
                           color: isToday ? Colors.purple[100] : Colors.grey[50],
                           borderRadius: BorderRadius.circular(8),
-                          border: isToday ? Border.all(color: Colors.purple, width: 2) : null,
+                          border: isToday
+                              ? Border.all(color: Colors.purple, width: 2)
+                              : null,
                         ),
                         child: Column(
                           children: [
@@ -547,9 +632,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
                 ],
               ),
             ),
-            
+
             const SizedBox(height: 8),
-            
+
             // Schedule Grid
             Expanded(
               child: SingleChildScrollView(
@@ -561,7 +646,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
                       margin: const EdgeInsets.only(bottom: 2),
                       decoration: BoxDecoration(
                         border: Border(
-                          bottom: BorderSide(color: Colors.grey[200]!, width: 1),
+                          bottom:
+                              BorderSide(color: Colors.grey[200]!, width: 1),
                         ),
                       ),
                       child: Padding(
@@ -578,10 +664,12 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
                                   decoration: BoxDecoration(
                                     color: Colors.grey[50],
                                     borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(color: Colors.grey[200]!),
+                                    border:
+                                        Border.all(color: Colors.grey[200]!),
                                   ),
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Text(
                                         staff.name,
@@ -614,16 +702,19 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
                                 ),
                               ),
                             ),
-                            
+
                             // Week Schedule
                             Expanded(
                               child: Row(
                                 children: List.generate(7, (dayIndex) {
-                                  final date = startOfWeek.add(Duration(days: dayIndex));
+                                  final date =
+                                      startOfWeek.add(Duration(days: dayIndex));
                                   return Expanded(
                                     child: Container(
-                                      margin: const EdgeInsets.symmetric(horizontal: 1),
-                                      child: _buildEnhancedShiftCell(staff, date),
+                                      margin: const EdgeInsets.symmetric(
+                                          horizontal: 1),
+                                      child:
+                                          _buildEnhancedShiftCell(staff, date),
                                     ),
                                   );
                                 }),
@@ -644,16 +735,19 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
   }
 
   Widget _buildMonthlyView() {
-    final firstDayOfMonth = DateTime(_selectedDate.year, _selectedDate.month, 1);
-    final lastDayOfMonth = DateTime(_selectedDate.year, _selectedDate.month + 1, 0);
-    final firstDayOfCalendar = firstDayOfMonth.subtract(Duration(days: firstDayOfMonth.weekday - 1));
+    final firstDayOfMonth =
+        DateTime(_selectedDate.year, _selectedDate.month, 1);
+    final lastDayOfMonth =
+        DateTime(_selectedDate.year, _selectedDate.month + 1, 0);
+    final firstDayOfCalendar =
+        firstDayOfMonth.subtract(Duration(days: firstDayOfMonth.weekday - 1));
     final daysInCalendar = 42; // 6 weeks * 7 days
-    
+
     return StreamBuilder<List<Staff>>(
       stream: _staffService.getAllStaff(),
       builder: (context, snapshot) {
         final staffList = snapshot.data ?? [];
-        
+
         return SingleChildScrollView(
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -677,33 +771,39 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
                         ),
                       ),
                       child: Row(
-                        children: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-                            .map((day) => Expanded(
-                                  child: Text(
-                                    day,
-                                    textAlign: TextAlign.center,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.purple,
-                                    ),
-                                  ),
-                                ))
-                            .toList(),
+                        children:
+                            ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+                                .map((day) => Expanded(
+                                      child: Text(
+                                        day,
+                                        textAlign: TextAlign.center,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.purple,
+                                        ),
+                                      ),
+                                    ))
+                                .toList(),
                       ),
                     ),
-                    
+
                     // Calendar days
                     ...List.generate(6, (weekIndex) {
                       return Row(
                         children: List.generate(7, (dayIndex) {
                           final dayOffset = weekIndex * 7 + dayIndex;
-                          final currentDay = firstDayOfCalendar.add(Duration(days: dayOffset));
-                          final isCurrentMonth = currentDay.month == _selectedDate.month;
-                          final isToday = currentDay.day == DateTime.now().day &&
-                              currentDay.month == DateTime.now().month &&
-                              currentDay.year == DateTime.now().year;
-                          final shiftsCount = isCurrentMonth ? _getShiftsForDay(currentDay, staffList) : 0;
-                          
+                          final currentDay =
+                              firstDayOfCalendar.add(Duration(days: dayOffset));
+                          final isCurrentMonth =
+                              currentDay.month == _selectedDate.month;
+                          final isToday =
+                              currentDay.day == DateTime.now().day &&
+                                  currentDay.month == DateTime.now().month &&
+                                  currentDay.year == DateTime.now().year;
+                          final shiftsCount = isCurrentMonth
+                              ? _getShiftsForDay(currentDay, staffList)
+                              : 0;
+
                           return Expanded(
                             child: Container(
                               height: 80,
@@ -715,28 +815,38 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
                                 color: isToday ? Colors.purple[100] : null,
                               ),
                               child: InkWell(
-                                onTap: isCurrentMonth ? () => _showDaySchedule(currentDay, staffList) : null,
+                                onTap: isCurrentMonth
+                                    ? () =>
+                                        _showDaySchedule(currentDay, staffList)
+                                    : null,
                                 child: Padding(
                                   padding: const EdgeInsets.all(4),
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Text(
                                         currentDay.day.toString(),
                                         style: TextStyle(
-                                          fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
+                                          fontWeight: isToday
+                                              ? FontWeight.bold
+                                              : FontWeight.normal,
                                           color: isCurrentMonth
-                                              ? (isToday ? Colors.purple : Colors.black)
+                                              ? (isToday
+                                                  ? Colors.purple
+                                                  : Colors.black)
                                               : Colors.grey[400],
                                         ),
                                       ),
                                       if (isCurrentMonth && shiftsCount > 0)
                                         Container(
                                           margin: const EdgeInsets.only(top: 2),
-                                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 4, vertical: 1),
                                           decoration: BoxDecoration(
                                             color: Colors.purple,
-                                            borderRadius: BorderRadius.circular(8),
+                                            borderRadius:
+                                                BorderRadius.circular(8),
                                           ),
                                           child: Text(
                                             '$shiftsCount shifts',
@@ -758,9 +868,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
                   ],
                 ),
               ),
-              
+
               const SizedBox(height: 24),
-              
+
               // Monthly Summary
               Card(
                 child: Padding(
@@ -770,15 +880,23 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
                     children: [
                       const Text(
                         'Monthly Summary',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 12),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceAround,
                         children: [
-                          _buildMonthStat('Total Shifts', _getTotalShiftsInMonth(staffList).toString()),
-                          _buildMonthStat('Active Staff', staffList.where((s) => s.isActive).length.toString()),
-                          _buildMonthStat('Total Hours', '${_getTotalHoursInMonth(staffList).toStringAsFixed(0)}h'),
+                          _buildMonthStat('Total Shifts',
+                              _getTotalShiftsInMonth(staffList).toString()),
+                          _buildMonthStat(
+                              'Active Staff',
+                              staffList
+                                  .where((s) => s.isActive)
+                                  .length
+                                  .toString()),
+                          _buildMonthStat('Total Hours',
+                              '${_getTotalHoursInMonth(staffList).toStringAsFixed(0)}h'),
                         ],
                       ),
                     ],
@@ -791,13 +909,14 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
       },
     );
   }
-  
+
   Widget _buildMonthStat(String label, String value) {
     return Column(
       children: [
         Text(
           value,
-          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.purple),
+          style: const TextStyle(
+              fontSize: 20, fontWeight: FontWeight.bold, color: Colors.purple),
         ),
         Text(
           label,
@@ -806,25 +925,26 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
       ],
     );
   }
-  
+
   int _getShiftsForDay(DateTime day, List<Staff> staffList) {
     // Mock calculation - in real app, this would query Firestore
     return day.weekday <= 5 ? staffList.where((s) => s.isActive).length : 0;
   }
-  
+
   int _getTotalShiftsInMonth(List<Staff> staffList) {
     // Mock calculation - approximately 22 working days per month
     return staffList.where((s) => s.isActive).length * 22;
   }
-  
+
   double _getTotalHoursInMonth(List<Staff> staffList) {
     // Mock calculation - 8 hours per shift, 22 working days
     return staffList.where((s) => s.isActive).length * 22 * 8.0;
   }
-  
+
   void _showDaySchedule(DateTime day, List<Staff> staffList) {
-    final dayStaff = staffList.where((s) => s.isActive && day.weekday <= 5).toList();
-    
+    final dayStaff =
+        staffList.where((s) => s.isActive && day.weekday <= 5).toList();
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -838,16 +958,16 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
                 const Text('No shifts scheduled for this day')
               else
                 ...dayStaff.map((staff) => ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: _getRoleColor(staff.role),
-                    child: Text(
-                      staff.name[0].toUpperCase(),
-                      style: const TextStyle(color: Colors.white),
-                    ),
-                  ),
-                  title: Text(staff.name),
-                  subtitle: Text('${staff.role} • 9:00 AM - 5:00 PM'),
-                )),
+                      leading: CircleAvatar(
+                        backgroundColor: _getRoleColor(staff.role),
+                        child: Text(
+                          staff.name[0].toUpperCase(),
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                      ),
+                      title: Text(staff.name),
+                      subtitle: Text('${staff.role} • 9:00 AM - 5:00 PM'),
+                    )),
             ],
           ),
         ),
@@ -871,8 +991,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
 
   Widget _buildShiftCell(Staff staff, DateTime date) {
     // Mock shift data - in real app, this would come from Firestore
-    final hasShift = date.weekday <= 5 && staff.isActive; // Mock: weekdays only for active staff
-    
+    final hasShift = date.weekday <= 5 &&
+        staff.isActive; // Mock: weekdays only for active staff
+
     return Container(
       margin: const EdgeInsets.all(2),
       height: 40,
@@ -904,9 +1025,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
-        
+
         final staffList = snapshot.data ?? [];
-        
+
         return SingleChildScrollView(
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -934,9 +1055,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
                   ),
                 ],
               ),
-              
+
               const SizedBox(height: 24),
-              
+
               // Shift Management
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -948,31 +1069,35 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
                   Row(
                     children: [
                       if (_isMultiSelectMode) ...[
-                         ElevatedButton.icon(
-                           onPressed: _selectedShiftIds.isEmpty ? null : _bulkDeleteShifts,
-                           icon: const Icon(Icons.delete),
-                           label: Text('Delete (${_selectedShiftIds.length})'),
-                           style: ElevatedButton.styleFrom(
-                             backgroundColor: Colors.red,
-                             foregroundColor: Colors.white,
-                           ),
-                         ),
-                         const SizedBox(width: 8),
-                         ElevatedButton.icon(
-                           onPressed: _selectedShiftIds.isEmpty ? null : _bulkCopyShifts,
-                           icon: const Icon(Icons.copy),
-                           label: Text('Copy (${_selectedShiftIds.length})'),
-                           style: ElevatedButton.styleFrom(
-                             backgroundColor: Colors.blue,
-                             foregroundColor: Colors.white,
-                           ),
-                         ),
-                         const SizedBox(width: 8),
-                         TextButton(
-                           onPressed: _exitMultiSelectMode,
-                           child: const Text('Cancel'),
-                         ),
-                       ] else ...[
+                        ElevatedButton.icon(
+                          onPressed: _selectedShiftIds.isEmpty
+                              ? null
+                              : _bulkDeleteShifts,
+                          icon: const Icon(Icons.delete),
+                          label: Text('Delete (${_selectedShiftIds.length})'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red,
+                            foregroundColor: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton.icon(
+                          onPressed: _selectedShiftIds.isEmpty
+                              ? null
+                              : _bulkCopyShifts,
+                          icon: const Icon(Icons.copy),
+                          label: Text('Copy (${_selectedShiftIds.length})'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue,
+                            foregroundColor: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        TextButton(
+                          onPressed: _exitMultiSelectMode,
+                          child: const Text('Cancel'),
+                        ),
+                      ] else ...[
                         TextButton.icon(
                           onPressed: _enterMultiSelectMode,
                           icon: const Icon(Icons.checklist),
@@ -993,13 +1118,13 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
                   ),
                 ],
               ),
-              
+
               const SizedBox(height: 16),
-              
+
               // Shifts List
-              ...staffList.where((s) => s.isActive).map((staff) => 
-                _buildShiftCard(staff),
-              ),
+              ...staffList.where((s) => s.isActive).map(
+                    (staff) => _buildShiftCard(staff),
+                  ),
             ],
           ),
         );
@@ -1014,11 +1139,11 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
-        
+
         final staffList = snapshot.data ?? [];
         final activeStaff = staffList.where((s) => s.isActive).toList();
         final inactiveStaff = staffList.where((s) => !s.isActive).toList();
-        
+
         return SingleChildScrollView(
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -1046,20 +1171,25 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
                   ),
                 ],
               ),
-              
+
               const SizedBox(height: 24),
-              
+
               // Department Filter
               const Text(
                 'Staff by Department',
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               ),
-              
+
               const SizedBox(height: 16),
-              
+
               // Department Tabs
-              ...['All', 'Operations', 'Customer Service', 'Kitchen', 'Maintenance']
-                  .map((dept) => _buildDepartmentSection(dept, staffList)),
+              ...[
+                'All',
+                'Operations',
+                'Customer Service',
+                'Kitchen',
+                'Maintenance'
+              ].map((dept) => _buildDepartmentSection(dept, staffList)),
             ],
           ),
         );
@@ -1067,7 +1197,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
     );
   }
 
-  Widget _buildSummaryCard(String title, String value, IconData icon, Color color) {
+  Widget _buildSummaryCard(
+      String title, String value, IconData icon, Color color) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -1093,7 +1224,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
   Widget _buildShiftCard(Staff staff) {
     final shiftId = '${staff.id}_${DateTime.now().millisecondsSinceEpoch}';
     final isSelected = _selectedShiftIds.contains(shiftId);
-    
+
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       color: isSelected ? Colors.blue.withOpacity(0.1) : null,
@@ -1115,7 +1246,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
                 backgroundColor: _getRoleColor(staff.role),
                 child: Text(
                   staff.name[0].toUpperCase(),
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.bold),
                 ),
               ),
         title: Text(staff.name),
@@ -1135,7 +1267,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
                 itemBuilder: (context) => [
                   const PopupMenuItem(value: 'edit', child: Text('Edit Shift')),
                   const PopupMenuItem(value: 'copy', child: Text('Copy Shift')),
-                  const PopupMenuItem(value: 'delete', child: Text('Delete Shift')),
+                  const PopupMenuItem(
+                      value: 'delete', child: Text('Delete Shift')),
                 ],
                 onSelected: (value) {
                   switch (value) {
@@ -1170,31 +1303,33 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
     final deptStaff = department == 'All'
         ? allStaff
         : allStaff.where((s) => s.department == department).toList();
-    
+
     if (deptStaff.isEmpty && department != 'All') {
       return const SizedBox.shrink();
     }
-    
+
     return ExpansionTile(
       title: Text('$department (${deptStaff.length})'),
-      children: deptStaff.map((staff) => ListTile(
-        leading: CircleAvatar(
-          backgroundColor: _getRoleColor(staff.role),
-          child: Text(
-            staff.name[0].toUpperCase(),
-            style: const TextStyle(color: Colors.white),
-          ),
-        ),
-        title: Text(staff.name),
-        subtitle: Text(staff.role),
-        trailing: Switch(
-          value: staff.isActive,
-          onChanged: (value) {
-            // Toggle staff availability
-            _toggleStaffAvailability(staff, value);
-          },
-        ),
-      )).toList(),
+      children: deptStaff
+          .map((staff) => ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: _getRoleColor(staff.role),
+                  child: Text(
+                    staff.name[0].toUpperCase(),
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                ),
+                title: Text(staff.name),
+                subtitle: Text(staff.role),
+                trailing: Switch(
+                  value: staff.isActive,
+                  onChanged: (value) {
+                    // Toggle staff availability
+                    _toggleStaffAvailability(staff, value);
+                  },
+                ),
+              ))
+          .toList(),
     );
   }
 
@@ -1205,8 +1340,18 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
 
   String _getMonthName(int month) {
     const months = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December'
     ];
     return months[month - 1];
   }
@@ -1234,7 +1379,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
   }
 
   // Action Methods
-  void _showAddShiftDialog({DateTime? preselectedDate, String? preselectedStaffId}) {
+  void _showAddShiftDialog(
+      {DateTime? preselectedDate, String? preselectedStaffId}) {
     DateTime selectedDate = preselectedDate ?? DateTime.now();
     TimeOfDay startTime = const TimeOfDay(hour: 9, minute: 0);
     TimeOfDay endTime = const TimeOfDay(hour: 17, minute: 0);
@@ -1245,7 +1391,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
     String recurringType = 'Weekly';
     int recurringCount = 1;
     final formKey = GlobalKey<FormState>();
-    
+
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -1267,307 +1413,350 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                  // Date Selection
-                  const Text('Date', style: TextStyle(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
-                  InkWell(
-                    onTap: () async {
-                      final date = await showDatePicker(
-                        context: context,
-                        initialDate: selectedDate,
-                        firstDate: DateTime.now(),
-                        lastDate: DateTime.now().add(const Duration(days: 365)),
-                      );
-                      if (date != null) {
-                        setState(() => selectedDate = date);
-                      }
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: Colors.grey),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.calendar_today),
-                          const SizedBox(width: 8),
-                          Text(_formatDate(selectedDate)),
-                        ],
-                      ),
-                    ),
-                  ),
-                  
-                  const SizedBox(height: 16),
-                  
-                  // Time Selection
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Start Time', style: TextStyle(fontWeight: FontWeight.bold)),
-                            const SizedBox(height: 8),
-                            InkWell(
-                              onTap: () async {
-                                final time = await showTimePicker(
-                                  context: context,
-                                  initialTime: startTime,
-                                );
-                                if (time != null) {
-                                  setState(() => startTime = time);
-                                }
-                              },
-                              child: Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  border: Border.all(color: Colors.grey),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Row(
-                                  children: [
-                                    const Icon(Icons.access_time),
-                                    const SizedBox(width: 8),
-                                    Text(startTime.format(context)),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('End Time', style: TextStyle(fontWeight: FontWeight.bold)),
-                            const SizedBox(height: 8),
-                            InkWell(
-                              onTap: () async {
-                                final time = await showTimePicker(
-                                  context: context,
-                                  initialTime: endTime,
-                                );
-                                if (time != null) {
-                                  setState(() => endTime = time);
-                                }
-                              },
-                              child: Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  border: Border.all(color: Colors.grey),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Row(
-                                  children: [
-                                    const Icon(Icons.access_time),
-                                    const SizedBox(width: 8),
-                                    Text(endTime.format(context)),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  
-                  const SizedBox(height: 16),
-                  
-                  // Role Filter
-                  const Text('Role Filter', style: TextStyle(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
-                  DropdownButtonFormField<String>(
-                    initialValue: selectedRole,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    ),
-                    items: ['All Roles', 'Manager', 'Supervisor', 'Cashier', 'Cook', 'Server']
-                        .map((role) => DropdownMenuItem(value: role, child: Text(role)))
-                        .toList(),
-                    onChanged: (value) {
-                      setState(() {
-                        selectedRole = value!;
-                        selectedStaffId = null; // Reset staff selection
-                      });
-                    },
-                  ),
-                  
-                  const SizedBox(height: 16),
-                  
-                  // Staff Selection
-                  const Text('Assign Staff', style: TextStyle(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
-                  StreamBuilder<List<Staff>>(
-                    stream: _staffService.getAllStaff(),
-                    builder: (context, snapshot) {
-                      final staffList = snapshot.data ?? [];
-                      final filteredStaff = selectedRole == 'All Roles'
-                          ? staffList.where((s) => s.isActive).toList()
-                          : staffList.where((s) => s.isActive && s.role == selectedRole).toList();
-                      
-                      return DropdownButtonFormField<String>(
-                        initialValue: selectedStaffId,
-                        hint: const Text('Select staff member'),
-                        decoration: const InputDecoration(
-                          border: OutlineInputBorder(),
-                          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        ),
-                        items: filteredStaff
-                            .map((staff) => DropdownMenuItem(
-                                  value: staff.id,
-                                  child: Row(
-                                    children: [
-                                      CircleAvatar(
-                                        radius: 12,
-                                        backgroundColor: _getRoleColor(staff.role),
-                                        child: Text(
-                                          staff.name[0].toUpperCase(),
-                                          style: const TextStyle(color: Colors.white, fontSize: 10),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Text(staff.name, style: const TextStyle(fontSize: 14)),
-                                            Text(
-                                              '${staff.role} • ${staff.department}',
-                                              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ))
-                            .toList(),
-                        onChanged: (value) {
-                          setState(() => selectedStaffId = value);
-                        },
-                      );
-                    },
-                  ),
-                  
-                  const SizedBox(height: 16),
-                  
-                  // Shift Notes
-                  const Text('Notes (Optional)', style: TextStyle(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
-                  TextFormField(
-                    onChanged: (value) => shiftNotes = value,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      hintText: 'Add any special instructions or notes...',
-                      contentPadding: EdgeInsets.all(12),
-                    ),
-                    maxLines: 2,
-                  ),
-                  
-                  const SizedBox(height: 16),
-                  
-                  // Recurring Shift Option
-                  Row(
-                    children: [
-                      Checkbox(
-                        value: isRecurring,
-                        onChanged: (value) {
-                          setState(() => isRecurring = value ?? false);
-                        },
-                      ),
-                      const Text('Create recurring shift', style: TextStyle(fontWeight: FontWeight.bold)),
-                    ],
-                  ),
-                  
-                  if (isRecurring) ...[
+                    // Date Selection
+                    const Text('Date',
+                        style: TextStyle(fontWeight: FontWeight.bold)),
                     const SizedBox(height: 8),
+                    InkWell(
+                      onTap: () async {
+                        final date = await showDatePicker(
+                          context: context,
+                          initialDate: selectedDate,
+                          firstDate: DateTime.now(),
+                          lastDate:
+                              DateTime.now().add(const Duration(days: 365)),
+                        );
+                        if (date != null) {
+                          setState(() => selectedDate = date);
+                        }
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.calendar_today),
+                            const SizedBox(width: 8),
+                            Text(_formatDate(selectedDate)),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // Time Selection
                     Row(
                       children: [
                         Expanded(
-                          child: DropdownButtonFormField<String>(
-                            initialValue: recurringType,
-                            decoration: const InputDecoration(
-                              border: OutlineInputBorder(),
-                              labelText: 'Frequency',
-                              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                            ),
-                            items: ['Daily', 'Weekly', 'Monthly']
-                                .map((type) => DropdownMenuItem(value: type, child: Text(type)))
-                                .toList(),
-                            onChanged: (value) {
-                              setState(() => recurringType = value!);
-                            },
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Start Time',
+                                  style:
+                                      TextStyle(fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 8),
+                              InkWell(
+                                onTap: () async {
+                                  final time = await showTimePicker(
+                                    context: context,
+                                    initialTime: startTime,
+                                  );
+                                  if (time != null) {
+                                    setState(() => startTime = time);
+                                  }
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    border: Border.all(color: Colors.grey),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.access_time),
+                                      const SizedBox(width: 8),
+                                      Text(startTime.format(context)),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                         const SizedBox(width: 16),
                         Expanded(
-                          child: TextFormField(
-                            initialValue: recurringCount.toString(),
-                            decoration: const InputDecoration(
-                              border: OutlineInputBorder(),
-                              labelText: 'Repeat Count',
-                              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                            ),
-                            keyboardType: TextInputType.number,
-                            validator: (value) {
-                              if (value == null || value.isEmpty) return 'Required';
-                              final count = int.tryParse(value);
-                              if (count == null || count < 1 || count > 52) {
-                                return 'Enter 1-52';
-                              }
-                              return null;
-                            },
-                            onChanged: (value) {
-                              recurringCount = int.tryParse(value) ?? 1;
-                            },
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('End Time',
+                                  style:
+                                      TextStyle(fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 8),
+                              InkWell(
+                                onTap: () async {
+                                  final time = await showTimePicker(
+                                    context: context,
+                                    initialTime: endTime,
+                                  );
+                                  if (time != null) {
+                                    setState(() => endTime = time);
+                                  }
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    border: Border.all(color: Colors.grey),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.access_time),
+                                      const SizedBox(width: 8),
+                                      Text(endTime.format(context)),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
                     ),
-                  ],
-                  
-                  const SizedBox(height: 16),
-                  
-                  // Shift Duration Preview
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.grey[100],
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.grey[300]!),
+
+                    const SizedBox(height: 16),
+
+                    // Role Filter
+                    const Text('Role Filter',
+                        style: TextStyle(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    DropdownButtonFormField<String>(
+                      initialValue: selectedRole,
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        contentPadding:
+                            EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      ),
+                      items: [
+                        'All Roles',
+                        'Manager',
+                        'Supervisor',
+                        'Cashier',
+                        'Cook',
+                        'Server'
+                      ]
+                          .map((role) =>
+                              DropdownMenuItem(value: role, child: Text(role)))
+                          .toList(),
+                      onChanged: (value) {
+                        setState(() {
+                          selectedRole = value!;
+                          selectedStaffId = null; // Reset staff selection
+                        });
+                      },
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+
+                    const SizedBox(height: 16),
+
+                    // Staff Selection
+                    const Text('Assign Staff',
+                        style: TextStyle(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    StreamBuilder<List<Staff>>(
+                      stream: _staffService.getAllStaff(),
+                      builder: (context, snapshot) {
+                        final staffList = snapshot.data ?? [];
+                        final filteredStaff = selectedRole == 'All Roles'
+                            ? staffList.where((s) => s.isActive).toList()
+                            : staffList
+                                .where(
+                                    (s) => s.isActive && s.role == selectedRole)
+                                .toList();
+
+                        return DropdownButtonFormField<String>(
+                          initialValue: selectedStaffId,
+                          hint: const Text('Select staff member'),
+                          decoration: const InputDecoration(
+                            border: OutlineInputBorder(),
+                            contentPadding: EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 8),
+                          ),
+                          items: filteredStaff
+                              .map((staff) => DropdownMenuItem(
+                                    value: staff.id,
+                                    child: Row(
+                                      children: [
+                                        CircleAvatar(
+                                          radius: 12,
+                                          backgroundColor:
+                                              _getRoleColor(staff.role),
+                                          child: Text(
+                                            staff.name[0].toUpperCase(),
+                                            style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 10),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Text(staff.name,
+                                                  style: const TextStyle(
+                                                      fontSize: 14)),
+                                              Text(
+                                                '${staff.role} • ${staff.department}',
+                                                style: TextStyle(
+                                                    fontSize: 12,
+                                                    color: Colors.grey[600]),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ))
+                              .toList(),
+                          onChanged: (value) {
+                            setState(() => selectedStaffId = value);
+                          },
+                        );
+                      },
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // Shift Notes
+                    const Text('Notes (Optional)',
+                        style: TextStyle(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      onChanged: (value) => shiftNotes = value,
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        hintText: 'Add any special instructions or notes...',
+                        contentPadding: EdgeInsets.all(12),
+                      ),
+                      maxLines: 2,
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // Recurring Shift Option
+                    Row(
                       children: [
-                        Row(
-                          children: [
-                            Icon(Icons.info_outline, size: 16, color: Colors.blue),
-                            const SizedBox(width: 4),
-                            Text('Shift Summary', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
-                          ],
+                        Checkbox(
+                          value: isRecurring,
+                          onChanged: (value) {
+                            setState(() => isRecurring = value ?? false);
+                          },
                         ),
-                        const SizedBox(height: 8),
-                        Text('Duration: ${_calculateShiftDuration(startTime, endTime)}h'),
-                        Text('Date: ${_formatDate(selectedDate)}'),
-                        if (selectedStaffId != null)
-                          FutureBuilder<Staff?>(
-                            future: _getStaffById(selectedStaffId!),
-                            builder: (context, snapshot) {
-                              final staff = snapshot.data;
-                              return Text('Staff: ${staff?.name ?? 'Loading...'}');
-                            },
-                          ),
-                        if (isRecurring)
-                          Text('Recurring: $recurringCount times $recurringType'),
+                        const Text('Create recurring shift',
+                            style: TextStyle(fontWeight: FontWeight.bold)),
                       ],
                     ),
-                  ),
+
+                    if (isRecurring) ...[
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: DropdownButtonFormField<String>(
+                              initialValue: recurringType,
+                              decoration: const InputDecoration(
+                                border: OutlineInputBorder(),
+                                labelText: 'Frequency',
+                                contentPadding: EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 8),
+                              ),
+                              items: ['Daily', 'Weekly', 'Monthly']
+                                  .map((type) => DropdownMenuItem(
+                                      value: type, child: Text(type)))
+                                  .toList(),
+                              onChanged: (value) {
+                                setState(() => recurringType = value!);
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: TextFormField(
+                              initialValue: recurringCount.toString(),
+                              decoration: const InputDecoration(
+                                border: OutlineInputBorder(),
+                                labelText: 'Repeat Count',
+                                contentPadding: EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 8),
+                              ),
+                              keyboardType: TextInputType.number,
+                              validator: (value) {
+                                if (value == null || value.isEmpty) {
+                                  return 'Required';
+                                }
+                                final count = int.tryParse(value);
+                                if (count == null || count < 1 || count > 52) {
+                                  return 'Enter 1-52';
+                                }
+                                return null;
+                              },
+                              onChanged: (value) {
+                                recurringCount = int.tryParse(value) ?? 1;
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+
+                    const SizedBox(height: 16),
+
+                    // Shift Duration Preview
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[100],
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.grey[300]!),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.info_outline,
+                                  size: 16, color: Colors.blue),
+                              const SizedBox(width: 4),
+                              Text('Shift Summary',
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.blue)),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                              'Duration: ${_calculateShiftDuration(startTime, endTime)}h'),
+                          Text('Date: ${_formatDate(selectedDate)}'),
+                          if (selectedStaffId != null)
+                            FutureBuilder<Staff?>(
+                              future: _getStaffById(selectedStaffId!),
+                              builder: (context, snapshot) {
+                                final staff = snapshot.data;
+                                return Text(
+                                    'Staff: ${staff?.name ?? 'Loading...'}');
+                              },
+                            ),
+                          if (isRecurring)
+                            Text(
+                                'Recurring: $recurringCount times $recurringType'),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -1584,9 +1773,17 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
                       if (formKey.currentState!.validate()) {
                         Navigator.pop(context);
                         if (isRecurring) {
-                          _createRecurringShifts(selectedDate, startTime, endTime, selectedStaffId!, recurringType, recurringCount, shiftNotes);
+                          _createRecurringShifts(
+                              selectedDate,
+                              startTime,
+                              endTime,
+                              selectedStaffId!,
+                              recurringType,
+                              recurringCount,
+                              shiftNotes);
                         } else {
-                          _createShift(selectedDate, startTime, endTime, selectedStaffId!, shiftNotes);
+                          _createShift(selectedDate, startTime, endTime,
+                              selectedStaffId!, shiftNotes);
                         }
                       }
                     }
@@ -1595,26 +1792,30 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
                 backgroundColor: Colors.purple,
                 foregroundColor: Colors.white,
               ),
-              child: Text(isRecurring ? 'Create Recurring Shifts' : 'Create Shift'),
+              child: Text(
+                  isRecurring ? 'Create Recurring Shifts' : 'Create Shift'),
             ),
           ],
         ),
       ),
     );
   }
-  
-  void _createShift(DateTime date, TimeOfDay startTime, TimeOfDay endTime, String staffId, [String? notes]) async {
+
+  void _createShift(
+      DateTime date, TimeOfDay startTime, TimeOfDay endTime, String staffId,
+      [String? notes]) async {
     // Check for conflicts before creating
-    final conflicts = await _checkShiftConflicts(date, startTime, endTime, staffId);
-    
+    final conflicts =
+        await _checkShiftConflicts(date, startTime, endTime, staffId);
+
     if (conflicts.isNotEmpty) {
       _showConflictDialog(conflicts, date, startTime, endTime, staffId);
       return;
     }
-    
+
     // In a real app, this would save to Firestore
     final duration = _calculateShiftDuration(startTime, endTime);
-    
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
@@ -1624,7 +1825,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
       ),
     );
   }
-  
+
   double _calculateShiftDuration(TimeOfDay start, TimeOfDay end) {
     final startMinutes = start.hour * 60 + start.minute;
     final endMinutes = end.hour * 60 + end.minute;
@@ -1646,10 +1847,17 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
     );
   }
 
-  void _createRecurringShifts(DateTime startDate, TimeOfDay startTime, TimeOfDay endTime, String staffId, String recurringType, int count, String? notes) async {
+  void _createRecurringShifts(
+      DateTime startDate,
+      TimeOfDay startTime,
+      TimeOfDay endTime,
+      String staffId,
+      String recurringType,
+      int count,
+      String? notes) async {
     for (int i = 0; i < count; i++) {
       DateTime shiftDate = startDate;
-      
+
       switch (recurringType) {
         case 'Daily':
           shiftDate = startDate.add(Duration(days: i));
@@ -1658,17 +1866,19 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
           shiftDate = startDate.add(Duration(days: i * 7));
           break;
         case 'Monthly':
-          shiftDate = DateTime(startDate.year, startDate.month + i, startDate.day);
+          shiftDate =
+              DateTime(startDate.year, startDate.month + i, startDate.day);
           break;
       }
-      
+
       // Check for conflicts before creating each shift
-      final conflicts = await _checkShiftConflicts(shiftDate, startTime, endTime, staffId);
+      final conflicts =
+          await _checkShiftConflicts(shiftDate, startTime, endTime, staffId);
       if (conflicts.isEmpty) {
         _createShift(shiftDate, startTime, endTime, staffId, notes);
       }
     }
-    
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('Created $count recurring shifts'),
@@ -1677,25 +1887,34 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
     );
   }
 
-  void _updateShift(DateTime date, TimeOfDay startTime, TimeOfDay endTime, String staffId, String role, String? notes, Map<String, dynamic>? existingShift) async {
+  void _updateShift(
+      DateTime date,
+      TimeOfDay startTime,
+      TimeOfDay endTime,
+      String staffId,
+      String role,
+      String? notes,
+      Map<String, dynamic>? existingShift) async {
     // Check for conflicts before updating (excluding the current shift)
-    final conflicts = await _checkShiftConflicts(date, startTime, endTime, staffId);
-    
+    final conflicts =
+        await _checkShiftConflicts(date, startTime, endTime, staffId);
+
     if (conflicts.isNotEmpty && existingShift != null) {
       // Filter out conflicts with the same shift being edited
-      final relevantConflicts = conflicts.where((conflict) => 
-        conflict['shift']['id'] != existingShift['id']
-      ).toList();
-      
+      final relevantConflicts = conflicts
+          .where((conflict) => conflict['shift']['id'] != existingShift['id'])
+          .toList();
+
       if (relevantConflicts.isNotEmpty) {
-        _showConflictDialog(relevantConflicts, date, startTime, endTime, staffId);
+        _showConflictDialog(
+            relevantConflicts, date, startTime, endTime, staffId);
         return;
       }
     }
-    
+
     // In a real app, this would update the shift in Firestore
     final duration = _calculateShiftDuration(startTime, endTime);
-    
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
@@ -1707,20 +1926,17 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
   }
 
   // Conflict detection methods
-  Future<List<Map<String, dynamic>>> _checkShiftConflicts(
-    DateTime date, 
-    TimeOfDay startTime, 
-    TimeOfDay endTime, 
-    String staffId
-  ) async {
+  Future<List<Map<String, dynamic>>> _checkShiftConflicts(DateTime date,
+      TimeOfDay startTime, TimeOfDay endTime, String staffId) async {
     List<Map<String, dynamic>> conflicts = [];
-    
+
     // Check for overlapping shifts for the same staff member
     // In a real app, this would query the database
     final existingShifts = _getExistingShifts(date, staffId);
-    
+
     for (final shift in existingShifts) {
-      if (_isTimeOverlapping(startTime, endTime, shift['startTime'], shift['endTime'])) {
+      if (_isTimeOverlapping(
+          startTime, endTime, shift['startTime'], shift['endTime'])) {
         conflicts.add({
           'type': 'staff_overlap',
           'message': 'Staff member already has a shift during this time',
@@ -1728,29 +1944,33 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
         });
       }
     }
-    
+
     // Check for minimum rest period (8 hours between shifts)
     final previousShift = _getPreviousShift(date, staffId);
     if (previousShift != null) {
-      final restHours = _calculateRestPeriod(previousShift['endTime'], startTime);
+      final restHours =
+          _calculateRestPeriod(previousShift['endTime'], startTime);
       if (restHours < 8) {
         conflicts.add({
           'type': 'insufficient_rest',
-          'message': 'Insufficient rest period (${restHours.toStringAsFixed(1)}h). Minimum 8 hours required.',
+          'message':
+              'Insufficient rest period (${restHours.toStringAsFixed(1)}h). Minimum 8 hours required.',
           'shift': previousShift,
         });
       }
     }
-    
+
     // Check for maximum daily hours (12 hours)
-    final dailyHours = _calculateDailyHours(date, staffId) + _calculateShiftDuration(startTime, endTime);
+    final dailyHours = _calculateDailyHours(date, staffId) +
+        _calculateShiftDuration(startTime, endTime);
     if (dailyHours > 12) {
       conflicts.add({
         'type': 'max_hours_exceeded',
-        'message': 'Daily hours limit exceeded (${dailyHours.toStringAsFixed(1)}h). Maximum 12 hours allowed.',
+        'message':
+            'Daily hours limit exceeded (${dailyHours.toStringAsFixed(1)}h). Maximum 12 hours allowed.',
       });
     }
-    
+
     return conflicts;
   }
 
@@ -1782,26 +2002,23 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
   double _calculateRestPeriod(TimeOfDay previousEnd, TimeOfDay currentStart) {
     final previousMinutes = previousEnd.hour * 60 + previousEnd.minute;
     final currentMinutes = currentStart.hour * 60 + currentStart.minute;
-    final restMinutes = (currentMinutes + 1440) - previousMinutes; // Add 24h if next day
+    final restMinutes =
+        (currentMinutes + 1440) - previousMinutes; // Add 24h if next day
     return restMinutes / 60.0;
   }
 
-  bool _isTimeOverlapping(TimeOfDay start1, TimeOfDay end1, TimeOfDay start2, TimeOfDay end2) {
+  bool _isTimeOverlapping(
+      TimeOfDay start1, TimeOfDay end1, TimeOfDay start2, TimeOfDay end2) {
     final start1Minutes = start1.hour * 60 + start1.minute;
     final end1Minutes = end1.hour * 60 + end1.minute;
     final start2Minutes = start2.hour * 60 + start2.minute;
     final end2Minutes = end2.hour * 60 + end2.minute;
-    
+
     return start1Minutes < end2Minutes && end1Minutes > start2Minutes;
   }
 
-  void _showConflictDialog(
-    List<Map<String, dynamic>> conflicts,
-    DateTime date,
-    TimeOfDay startTime,
-    TimeOfDay endTime,
-    String staffId
-  ) {
+  void _showConflictDialog(List<Map<String, dynamic>> conflicts, DateTime date,
+      TimeOfDay startTime, TimeOfDay endTime, String staffId) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -1824,25 +2041,25 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
               ),
               const SizedBox(height: 12),
               ...conflicts.map((conflict) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(
-                      _getConflictIcon(conflict['type']),
-                      size: 16,
-                      color: _getConflictColor(conflict['type']),
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          _getConflictIcon(conflict['type']),
+                          size: 16,
+                          color: _getConflictColor(conflict['type']),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            conflict['message'],
+                            style: const TextStyle(fontSize: 14),
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        conflict['message'],
-                        style: const TextStyle(fontSize: 14),
-                      ),
-                    ),
-                  ],
-                ),
-              )),
+                  )),
             ],
           ),
         ),
@@ -1892,10 +2109,11 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
     }
   }
 
-  void _forceCreateShift(DateTime date, TimeOfDay startTime, TimeOfDay endTime, String staffId) {
+  void _forceCreateShift(
+      DateTime date, TimeOfDay startTime, TimeOfDay endTime, String staffId) {
     // Create shift despite conflicts
     final duration = _calculateShiftDuration(startTime, endTime);
-    
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
@@ -1907,7 +2125,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
   }
 
   // Weekly view helper methods
-  Widget _buildWeekSummaryCard(String title, String value, IconData icon, Color color) {
+  Widget _buildWeekSummaryCard(
+      String title, String value, IconData icon, Color color) {
     return Card(
       elevation: 2,
       child: Padding(
@@ -1964,7 +2183,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
     final hasShift = date.weekday <= 5; // Weekdays only for example
     final shiftTime = hasShift ? '9-17' : '';
     final isOvertime = hasShift && date.weekday == 5; // Friday overtime example
-    
+
     return GestureDetector(
       onTap: () {
         if (hasShift) {
@@ -1976,12 +2195,12 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
       child: Container(
         height: 60,
         decoration: BoxDecoration(
-          color: hasShift 
+          color: hasShift
               ? (isOvertime ? Colors.orange[100] : Colors.green[100])
               : Colors.grey[50],
           borderRadius: BorderRadius.circular(6),
           border: Border.all(
-            color: hasShift 
+            color: hasShift
                 ? (isOvertime ? Colors.orange : Colors.green)
                 : Colors.grey[300]!,
             width: hasShift ? 2 : 1,
@@ -1996,7 +2215,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.bold,
-                      color: isOvertime ? Colors.orange[800] : Colors.green[800],
+                      color:
+                          isOvertime ? Colors.orange[800] : Colors.green[800],
                     ),
                   ),
                   if (isOvertime)
@@ -2017,7 +2237,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
               ),
       ),
     );
-   }
+  }
 
   // Export and notification methods
   void _showExportDialog() {
@@ -2180,7 +2400,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
                   if (mounted) {
                     Navigator.pop(context);
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Notification settings saved')),
+                      const SnackBar(
+                          content: Text('Notification settings saved')),
                     );
                   }
                 },
@@ -2193,7 +2414,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
     );
   }
 
-   void _showShiftDetails(Staff staff, DateTime date) {
+  void _showShiftDetails(Staff staff, DateTime date) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -2226,16 +2447,18 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
     );
   }
 
-  void _showEditShiftDialog(Staff staff, {Map<String, dynamic>? existingShift}) {
+  void _showEditShiftDialog(Staff staff,
+      {Map<String, dynamic>? existingShift}) {
     // Pre-populate with existing shift data or defaults
-    DateTime selectedDate = existingShift != null 
+    DateTime selectedDate = existingShift != null
         ? (existingShift['date'] as DateTime?) ?? DateTime.now()
         : DateTime.now();
     TimeOfDay startTime = existingShift != null
         ? TimeOfDay.fromDateTime(existingShift['startTime'] ?? DateTime.now())
         : const TimeOfDay(hour: 9, minute: 0);
     TimeOfDay endTime = existingShift != null
-        ? TimeOfDay.fromDateTime(existingShift['endTime'] ?? DateTime.now().add(const Duration(hours: 8)))
+        ? TimeOfDay.fromDateTime(existingShift['endTime'] ??
+            DateTime.now().add(const Duration(hours: 8)))
         : const TimeOfDay(hour: 17, minute: 0);
     String? selectedStaffId = staff.id;
     String selectedRole = existingShift?['role'] ?? staff.role;
@@ -2263,15 +2486,18 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Date Selection
-                    const Text('Date', style: TextStyle(fontWeight: FontWeight.bold)),
+                    const Text('Date',
+                        style: TextStyle(fontWeight: FontWeight.bold)),
                     const SizedBox(height: 8),
                     InkWell(
                       onTap: () async {
                         final date = await showDatePicker(
                           context: context,
                           initialDate: selectedDate,
-                          firstDate: DateTime.now().subtract(const Duration(days: 30)),
-                          lastDate: DateTime.now().add(const Duration(days: 365)),
+                          firstDate:
+                              DateTime.now().subtract(const Duration(days: 30)),
+                          lastDate:
+                              DateTime.now().add(const Duration(days: 365)),
                         );
                         if (date != null) {
                           setState(() {
@@ -2295,9 +2521,10 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
                       ),
                     ),
                     const SizedBox(height: 16),
-                    
+
                     // Time Selection
-                    const Text('Time', style: TextStyle(fontWeight: FontWeight.bold)),
+                    const Text('Time',
+                        style: TextStyle(fontWeight: FontWeight.bold)),
                     const SizedBox(height: 8),
                     Row(
                       children: [
@@ -2363,17 +2590,26 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
                       ],
                     ),
                     const SizedBox(height: 16),
-                    
+
                     // Role Selection
-                    const Text('Role', style: TextStyle(fontWeight: FontWeight.bold)),
+                    const Text('Role',
+                        style: TextStyle(fontWeight: FontWeight.bold)),
                     const SizedBox(height: 8),
                     DropdownButtonFormField<String>(
                       initialValue: selectedRole,
                       decoration: const InputDecoration(
                         border: OutlineInputBorder(),
-                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        contentPadding:
+                            EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       ),
-                      items: ['Manager', 'Chef', 'Waiter', 'Cashier', 'Bartender', 'Hostess']
+                      items: [
+                        'Manager',
+                        'Chef',
+                        'Waiter',
+                        'Cashier',
+                        'Bartender',
+                        'Hostess'
+                      ]
                           .map((role) => DropdownMenuItem(
                                 value: role,
                                 child: Text(role),
@@ -2388,9 +2624,10 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
                       },
                     ),
                     const SizedBox(height: 16),
-                    
+
                     // Notes
-                    const Text('Notes (Optional)', style: TextStyle(fontWeight: FontWeight.bold)),
+                    const Text('Notes (Optional)',
+                        style: TextStyle(fontWeight: FontWeight.bold)),
                     const SizedBox(height: 8),
                     TextFormField(
                       initialValue: shiftNotes,
@@ -2405,7 +2642,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
                       },
                     ),
                     const SizedBox(height: 16),
-                    
+
                     // Shift Summary
                     Container(
                       padding: const EdgeInsets.all(12),
@@ -2417,9 +2654,11 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Shift Summary', style: TextStyle(fontWeight: FontWeight.bold)),
+                          const Text('Shift Summary',
+                              style: TextStyle(fontWeight: FontWeight.bold)),
                           const SizedBox(height: 8),
-                          Text('Duration: ${_calculateShiftDuration(startTime, endTime)}h'),
+                          Text(
+                              'Duration: ${_calculateShiftDuration(startTime, endTime)}h'),
                           Text('Date: ${_formatDate(selectedDate)}'),
                           Text('Staff: ${staff.name}'),
                           Text('Role: $selectedRole'),
@@ -2440,7 +2679,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
               onPressed: () {
                 if (formKey.currentState!.validate()) {
                   Navigator.pop(context);
-                  _updateShift(selectedDate, startTime, endTime, selectedStaffId, selectedRole, shiftNotes, existingShift);
+                  _updateShift(selectedDate, startTime, endTime,
+                      selectedStaffId, selectedRole, shiftNotes, existingShift);
                 }
               },
               style: ElevatedButton.styleFrom(
@@ -2475,7 +2715,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Selected Shifts'),
-        content: Text('Are you sure you want to delete ${_selectedShiftIds.length} selected shifts?'),
+        content: Text(
+            'Are you sure you want to delete ${_selectedShiftIds.length} selected shifts?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -2487,7 +2728,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
               // TODO: Implement actual bulk delete logic
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text('${_selectedShiftIds.length} shifts deleted successfully!'),
+                  content: Text(
+                      '${_selectedShiftIds.length} shifts deleted successfully!'),
                   backgroundColor: Colors.green,
                 ),
               );
@@ -2506,7 +2748,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Copy Selected Shifts'),
-        content: Text('Copy ${_selectedShiftIds.length} selected shifts to a new date?'),
+        content: Text(
+            'Copy ${_selectedShiftIds.length} selected shifts to a new date?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -2518,7 +2761,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
               // TODO: Implement actual bulk copy logic
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text('${_selectedShiftIds.length} shifts copied successfully!'),
+                  content: Text(
+                      '${_selectedShiftIds.length} shifts copied successfully!'),
                   backgroundColor: Colors.green,
                 ),
               );
@@ -2538,7 +2782,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
         ? TimeOfDay.fromDateTime(shiftDetails['startTime'] ?? DateTime.now())
         : const TimeOfDay(hour: 9, minute: 0);
     final TimeOfDay endTime = shiftDetails != null
-        ? TimeOfDay.fromDateTime(shiftDetails['endTime'] ?? DateTime.now().add(const Duration(hours: 8)))
+        ? TimeOfDay.fromDateTime(shiftDetails['endTime'] ??
+            DateTime.now().add(const Duration(hours: 8)))
         : const TimeOfDay(hour: 17, minute: 0);
     final String role = shiftDetails?['role'] ?? staff.role;
     final String notes = shiftDetails?['notes'] ?? '';
@@ -2546,7 +2791,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
     _showCopyShiftDialog(staff, originalDate, startTime, endTime, role, notes);
   }
 
-  void _showCopyShiftDialog(Staff originalStaff, DateTime originalDate, TimeOfDay startTime, TimeOfDay endTime, String role, String notes) {
+  void _showCopyShiftDialog(Staff originalStaff, DateTime originalDate,
+      TimeOfDay startTime, TimeOfDay endTime, String role, String notes) {
     DateTime selectedDate = DateTime.now();
     String? selectedStaffId = originalStaff.id;
     final GlobalKey<FormState> copyFormKey = GlobalKey<FormState>();
@@ -2592,7 +2838,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
                         Row(
                           children: [
                             CircleAvatar(
-                              backgroundColor: _getRoleColor(originalStaff.role),
+                              backgroundColor:
+                                  _getRoleColor(originalStaff.role),
                               radius: 16,
                               child: Text(
                                 originalStaff.name[0].toUpperCase(),
@@ -2610,7 +2857,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
                                 children: [
                                   Text(
                                     originalStaff.name,
-                                    style: const TextStyle(fontWeight: FontWeight.w500),
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w500),
                                   ),
                                   Text(
                                     '${_formatDate(originalDate)} • ${startTime.format(context)} - ${endTime.format(context)}',
@@ -2641,8 +2889,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
                     stream: _staffService.getAllStaff(),
                     builder: (context, snapshot) {
                       final staffList = snapshot.data ?? [];
-                      final activeStaff = staffList.where((s) => s.isActive).toList();
-                      
+                      final activeStaff =
+                          staffList.where((s) => s.isActive).toList();
+
                       return DropdownButtonFormField<String>(
                         initialValue: selectedStaffId,
                         decoration: const InputDecoration(
@@ -2740,9 +2989,12 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
                               border: OutlineInputBorder(),
                             ),
                             items: const [
-                              DropdownMenuItem(value: 'daily', child: Text('Daily')),
-                              DropdownMenuItem(value: 'weekly', child: Text('Weekly')),
-                              DropdownMenuItem(value: 'monthly', child: Text('Monthly')),
+                              DropdownMenuItem(
+                                  value: 'daily', child: Text('Daily')),
+                              DropdownMenuItem(
+                                  value: 'weekly', child: Text('Weekly')),
+                              DropdownMenuItem(
+                                  value: 'monthly', child: Text('Monthly')),
                             ],
                             onChanged: (value) {
                               setState(() {
@@ -2831,16 +3083,17 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
   ) async {
     // Get staff list from service
     final staffList = await _staffService.getAllStaff().first;
-    final selectedStaff = staffList.firstWhere((staff) => staff.id == selectedStaffId);
-    
+    final selectedStaff =
+        staffList.firstWhere((staff) => staff.id == selectedStaffId);
+
     if (copyToMultipleDates) {
       // Copy to multiple dates
       List<DateTime> copyDates = [];
       DateTime currentDate = selectedDate;
-      
+
       for (int i = 0; i < numberOfCopies; i++) {
         copyDates.add(currentDate);
-        
+
         switch (copyFrequency) {
           case 'daily':
             currentDate = currentDate.add(const Duration(days: 1));
@@ -2849,41 +3102,49 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
             currentDate = currentDate.add(const Duration(days: 7));
             break;
           case 'monthly':
-            currentDate = DateTime(currentDate.year, currentDate.month + 1, currentDate.day);
+            currentDate = DateTime(
+                currentDate.year, currentDate.month + 1, currentDate.day);
             break;
         }
       }
-      
+
       // Check for conflicts
       List<DateTime> conflictDates = [];
       for (DateTime date in copyDates) {
-        final conflicts = await _checkShiftConflicts(date, startTime, endTime, selectedStaffId);
+        final conflicts = await _checkShiftConflicts(
+            date, startTime, endTime, selectedStaffId);
         if (conflicts.isNotEmpty) {
           conflictDates.add(date);
         }
       }
-      
+
       if (conflictDates.isNotEmpty) {
         _showCopyConflictDialog(conflictDates, () {
-          _createMultipleCopies(copyDates, selectedStaff, startTime, endTime, role, notes);
+          _createMultipleCopies(
+              copyDates, selectedStaff, startTime, endTime, role, notes);
         });
       } else {
-        _createMultipleCopies(copyDates, selectedStaff, startTime, endTime, role, notes);
+        _createMultipleCopies(
+            copyDates, selectedStaff, startTime, endTime, role, notes);
       }
     } else {
       // Single copy
-      final conflicts = await _checkShiftConflicts(selectedDate, startTime, endTime, selectedStaffId);
+      final conflicts = await _checkShiftConflicts(
+          selectedDate, startTime, endTime, selectedStaffId);
       if (conflicts.isNotEmpty) {
         _showCopyConflictDialog([selectedDate], () {
-          _createSingleCopy(selectedDate, selectedStaff, startTime, endTime, role, notes);
+          _createSingleCopy(
+              selectedDate, selectedStaff, startTime, endTime, role, notes);
         });
       } else {
-        _createSingleCopy(selectedDate, selectedStaff, startTime, endTime, role, notes);
+        _createSingleCopy(
+            selectedDate, selectedStaff, startTime, endTime, role, notes);
       }
     }
   }
 
-  void _createSingleCopy(DateTime date, Staff staff, TimeOfDay startTime, TimeOfDay endTime, String role, String notes) {
+  void _createSingleCopy(DateTime date, Staff staff, TimeOfDay startTime,
+      TimeOfDay endTime, String role, String notes) {
     // In a real app, this would create the shift in Firestore
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -2900,7 +3161,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
     );
   }
 
-  void _createMultipleCopies(List<DateTime> dates, Staff staff, TimeOfDay startTime, TimeOfDay endTime, String role, String notes) {
+  void _createMultipleCopies(List<DateTime> dates, Staff staff,
+      TimeOfDay startTime, TimeOfDay endTime, String role, String notes) {
     // In a real app, this would create multiple shifts in Firestore
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -2917,7 +3179,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
     );
   }
 
-  void _showCopyConflictDialog(List<DateTime> conflictDates, VoidCallback onProceed) {
+  void _showCopyConflictDialog(
+      List<DateTime> conflictDates, VoidCallback onProceed) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -2935,15 +3198,16 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
             const Text('The following dates have conflicting shifts:'),
             const SizedBox(height: 8),
             ...conflictDates.map((date) => Padding(
-              padding: const EdgeInsets.symmetric(vertical: 2),
-              child: Row(
-                children: [
-                  const Icon(Icons.error_outline, size: 16, color: Colors.red),
-                  const SizedBox(width: 8),
-                  Text(_formatDate(date)),
-                ],
-              ),
-            )),
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.error_outline,
+                          size: 16, color: Colors.red),
+                      const SizedBox(width: 8),
+                      Text(_formatDate(date)),
+                    ],
+                  ),
+                )),
             const SizedBox(height: 12),
             const Text('Do you want to proceed anyway?'),
           ],
@@ -2976,7 +3240,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
         ? TimeOfDay.fromDateTime(shiftDetails['startTime'] ?? DateTime.now())
         : const TimeOfDay(hour: 9, minute: 0);
     final TimeOfDay endTime = shiftDetails != null
-        ? TimeOfDay.fromDateTime(shiftDetails['endTime'] ?? DateTime.now().add(const Duration(hours: 8)))
+        ? TimeOfDay.fromDateTime(shiftDetails['endTime'] ??
+            DateTime.now().add(const Duration(hours: 8)))
         : const TimeOfDay(hour: 17, minute: 0);
     final String role = shiftDetails?['role'] ?? staff.role;
     final String notes = shiftDetails?['notes'] ?? '';
@@ -3003,7 +3268,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
               ),
               const SizedBox(height: 16),
-              
+
               // Shift Details Card
               Container(
                 padding: const EdgeInsets.all(16),
@@ -3055,13 +3320,16 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
                     const SizedBox(height: 12),
                     const Divider(),
                     const SizedBox(height: 8),
-                    
+
                     // Shift Information
-                    _buildShiftDetailRow(Icons.calendar_today, 'Date', _formatDate(shiftDate)),
+                    _buildShiftDetailRow(
+                        Icons.calendar_today, 'Date', _formatDate(shiftDate)),
                     const SizedBox(height: 8),
-                    _buildShiftDetailRow(Icons.access_time, 'Time', '${startTime.format(context)} - ${endTime.format(context)}'),
+                    _buildShiftDetailRow(Icons.access_time, 'Time',
+                        '${startTime.format(context)} - ${endTime.format(context)}'),
                     const SizedBox(height: 8),
-                    _buildShiftDetailRow(Icons.timer, 'Duration', '${duration.toStringAsFixed(1)} hours'),
+                    _buildShiftDetailRow(Icons.timer, 'Duration',
+                        '${duration.toStringAsFixed(1)} hours'),
                     if (notes.isNotEmpty) ...[
                       const SizedBox(height: 8),
                       _buildShiftDetailRow(Icons.note, 'Notes', notes),
@@ -3070,7 +3338,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
                 ),
               ),
               const SizedBox(height: 16),
-              
+
               // Warning Message
               Container(
                 padding: const EdgeInsets.all(12),
@@ -3081,7 +3349,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.warning, color: Colors.orange.shade700, size: 20),
+                    Icon(Icons.warning,
+                        color: Colors.orange.shade700, size: 20),
                     const SizedBox(width: 8),
                     const Expanded(
                       child: Text(
@@ -3138,7 +3407,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
   void _performShiftDeletion(Staff staff, Map<String, dynamic>? shiftDetails) {
     // In a real app, this would delete the shift from Firestore
     final shiftDate = shiftDetails?['date'] ?? DateTime.now();
-    
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
@@ -3171,7 +3440,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
       ),
     );
   }
-  
+
   // Staff assignment helper methods
   void _showBulkAssignDialog() {
     showDialog(
@@ -3181,9 +3450,11 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
         content: const Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('Select multiple staff members and assign them to shifts for a specific date range.'),
+            Text(
+                'Select multiple staff members and assign them to shifts for a specific date range.'),
             SizedBox(height: 16),
-            Text('This feature allows you to quickly schedule multiple employees at once.'),
+            Text(
+                'This feature allows you to quickly schedule multiple employees at once.'),
           ],
         ),
         actions: [
@@ -3204,7 +3475,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
       ),
     );
   }
-  
+
   void _showAvailabilityManager() {
     showDialog(
       context: context,
@@ -3215,7 +3486,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
           children: [
             Text('Set staff availability for specific dates and time periods.'),
             SizedBox(height: 16),
-            Text('This helps prevent scheduling conflicts and ensures proper coverage.'),
+            Text(
+                'This helps prevent scheduling conflicts and ensures proper coverage.'),
           ],
         ),
         actions: [
@@ -3236,7 +3508,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
       ),
     );
   }
-  
+
   void _showQuickAssignDialog(Staff staff) {
     showDialog(
       context: context,
@@ -3255,9 +3527,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
               },
             ),
             ListTile(
-               leading: const Icon(Icons.calendar_today),
-               title: const Text('Tomorrow'),
-               subtitle: const Text('9:00 AM - 5:00 PM'),
+              leading: const Icon(Icons.calendar_today),
+              title: const Text('Tomorrow'),
+              subtitle: const Text('9:00 AM - 5:00 PM'),
               onTap: () {
                 Navigator.pop(context);
                 _assignQuickShift(staff, 'tomorrow');
@@ -3283,7 +3555,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
       ),
     );
   }
-  
+
   void _assignQuickShift(Staff staff, String period) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -3292,7 +3564,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
       ),
     );
   }
-  
+
   void _showAvailabilityUpdate(String staffName, bool isAvailable) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -3303,7 +3575,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
       ),
     );
   }
-  
+
   void _showStaffSchedule(Staff staff) {
     showDialog(
       context: context,
@@ -3348,7 +3620,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
       ),
     );
   }
-  
+
   Widget _buildScheduleDay(String day, String time) {
     return ListTile(
       leading: CircleAvatar(
@@ -3369,7 +3641,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with TickerProviderStat
       ),
     );
   }
-  
+
   void _showStaffShiftHistory(Staff staff) {
     showDialog(
       context: context,
@@ -3410,7 +3682,8 @@ class StaffManagementAppScreen extends StatefulWidget {
   const StaffManagementAppScreen({super.key});
 
   @override
-  State<StaffManagementAppScreen> createState() => _StaffManagementAppScreenState();
+  State<StaffManagementAppScreen> createState() =>
+      _StaffManagementAppScreenState();
 }
 
 class _StaffManagementAppScreenState extends State<StaffManagementAppScreen> {
@@ -3462,7 +3735,7 @@ class _StaffManagementAppScreenState extends State<StaffManagementAppScreen> {
               ),
             ),
             const SizedBox(height: 24),
-            
+
             // Quick Actions
             const Text(
               'Quick Actions',
@@ -3472,7 +3745,7 @@ class _StaffManagementAppScreenState extends State<StaffManagementAppScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            
+
             // Action Cards
             Expanded(
               child: GridView.count(
@@ -3590,7 +3863,7 @@ class _StaffListScreenState extends State<StaffListScreen> {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
-          
+
           if (snapshot.hasError) {
             return Center(
               child: Column(
@@ -3608,9 +3881,9 @@ class _StaffListScreenState extends State<StaffListScreen> {
               ),
             );
           }
-          
+
           final staffMembers = snapshot.data ?? [];
-          
+
           if (staffMembers.isEmpty) {
             return const Center(
               child: Column(
@@ -3625,7 +3898,7 @@ class _StaffListScreenState extends State<StaffListScreen> {
               ),
             );
           }
-          
+
           return ListView.builder(
             padding: const EdgeInsets.all(16),
             itemCount: staffMembers.length,
@@ -3635,10 +3908,12 @@ class _StaffListScreenState extends State<StaffListScreen> {
                 margin: const EdgeInsets.only(bottom: 12),
                 child: ListTile(
                   leading: CircleAvatar(
-                    backgroundColor: staff.isActive ? Colors.green : Colors.grey,
+                    backgroundColor:
+                        staff.isActive ? Colors.green : Colors.grey,
                     child: Text(
                       staff.name.isNotEmpty ? staff.name[0].toUpperCase() : '?',
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                      style: const TextStyle(
+                          color: Colors.white, fontWeight: FontWeight.bold),
                     ),
                   ),
                   title: Text(
@@ -3685,7 +3960,9 @@ class _StaffListScreenState extends State<StaffListScreen> {
             Text('Role: ${staff.role}'),
             Text('Department: ${staff.department}'),
             Text('Email: ${staff.email}'),
-            Text('Phone: ${staff.phone}'),
+            Text(
+              'Phone: ${AustralianPhoneNumber.formatForDisplay(staff.phone)}',
+            ),
             Text('Hourly Rate: \$${staff.hourlyRate.toStringAsFixed(2)}'),
             Text('Hire Date: ${staff.hireDate.toString().split(' ')[0]}'),
             Text('Status: ${staff.isActive ? 'Active' : 'Inactive'}'),
@@ -3718,13 +3995,18 @@ class _AddStaffScreenState extends State<AddStaffScreen> {
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
   final _hourlyRateController = TextEditingController();
-  
+
   String _selectedRole = 'Staff';
   String _selectedDepartment = 'Operations';
   bool _isLoading = false;
-  
+
   final List<String> _roles = ['Manager', 'Supervisor', 'Staff', 'Intern'];
-  final List<String> _departments = ['Operations', 'Customer Service', 'Kitchen', 'Maintenance'];
+  final List<String> _departments = [
+    'Operations',
+    'Customer Service',
+    'Kitchen',
+    'Maintenance'
+  ];
   final StaffService _staffService = StaffService();
 
   @override
@@ -3754,7 +4036,6 @@ class _AddStaffScreenState extends State<AddStaffScreen> {
                 },
               ),
               const SizedBox(height: 16),
-              
               TextFormField(
                 controller: _emailController,
                 decoration: const InputDecoration(
@@ -3772,7 +4053,6 @@ class _AddStaffScreenState extends State<AddStaffScreen> {
                 },
               ),
               const SizedBox(height: 16),
-              
               TextFormField(
                 controller: _phoneController,
                 decoration: const InputDecoration(
@@ -3787,7 +4067,6 @@ class _AddStaffScreenState extends State<AddStaffScreen> {
                 },
               ),
               const SizedBox(height: 16),
-              
               DropdownButtonFormField<String>(
                 initialValue: _selectedRole,
                 decoration: const InputDecoration(
@@ -3807,7 +4086,6 @@ class _AddStaffScreenState extends State<AddStaffScreen> {
                 },
               ),
               const SizedBox(height: 16),
-              
               DropdownButtonFormField<String>(
                 initialValue: _selectedDepartment,
                 decoration: const InputDecoration(
@@ -3827,7 +4105,6 @@ class _AddStaffScreenState extends State<AddStaffScreen> {
                 },
               ),
               const SizedBox(height: 16),
-              
               TextFormField(
                 controller: _hourlyRateController,
                 decoration: const InputDecoration(
@@ -3846,7 +4123,6 @@ class _AddStaffScreenState extends State<AddStaffScreen> {
                 },
               ),
               const SizedBox(height: 24),
-              
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
@@ -3878,7 +4154,7 @@ class _AddStaffScreenState extends State<AddStaffScreen> {
       setState(() {
         _isLoading = true;
       });
-      
+
       try {
         final staff = Staff(
           id: '', // Will be set by Firestore
@@ -3891,9 +4167,9 @@ class _AddStaffScreenState extends State<AddStaffScreen> {
           hireDate: DateTime.now(),
           isActive: true,
         );
-        
+
         await _staffService.addStaff(staff);
-        
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -3940,7 +4216,8 @@ class ReportsScreen extends StatefulWidget {
   State<ReportsScreen> createState() => _ReportsScreenState();
 }
 
-class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProviderStateMixin {
+class _ReportsScreenState extends State<ReportsScreen>
+    with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final StaffService _staffService = StaffService();
 
@@ -3990,7 +4267,7 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
             style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 20),
-          
+
           // Summary Cards with Real Data
           StreamBuilder<List<Staff>>(
             stream: _staffService.getAllStaff(),
@@ -3998,13 +4275,14 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());
               }
-              
+
               final staffList = snapshot.data ?? [];
-               final totalStaff = staffList.length;
-               final activeStaff = staffList.where((s) => s.isActive).length;
-               final onLeave = staffList.where((s) => !s.isActive).length;
-               final departments = staffList.map((s) => s.department).toSet().length;
-              
+              final totalStaff = staffList.length;
+              final activeStaff = staffList.where((s) => s.isActive).length;
+              final onLeave = staffList.where((s) => !s.isActive).length;
+              final departments =
+                  staffList.map((s) => s.department).toSet().length;
+
               return GridView.count(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
@@ -4013,17 +4291,21 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
                 mainAxisSpacing: 16,
                 childAspectRatio: 1.5,
                 children: [
-                  _buildSummaryCard('Total Staff', totalStaff.toString(), Icons.people, Colors.blue),
-                  _buildSummaryCard('Active Today', activeStaff.toString(), Icons.check_circle, Colors.green),
-                  _buildSummaryCard('On Leave', onLeave.toString(), Icons.event_busy, Colors.orange),
-                  _buildSummaryCard('Departments', departments.toString(), Icons.business, Colors.purple),
+                  _buildSummaryCard('Total Staff', totalStaff.toString(),
+                      Icons.people, Colors.blue),
+                  _buildSummaryCard('Active Today', activeStaff.toString(),
+                      Icons.check_circle, Colors.green),
+                  _buildSummaryCard('On Leave', onLeave.toString(),
+                      Icons.event_busy, Colors.orange),
+                  _buildSummaryCard('Departments', departments.toString(),
+                      Icons.business, Colors.purple),
                 ],
               );
             },
           ),
-          
+
           const SizedBox(height: 24),
-          
+
           // Recent Activity
           Card(
             child: Padding(
@@ -4060,7 +4342,7 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
             style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 20),
-          
+
           // Staff Distribution by Role
           StreamBuilder<List<Staff>>(
             stream: _staffService.getAllStaff(),
@@ -4073,14 +4355,15 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
                   ),
                 );
               }
-              
+
               final staffList = snapshot.data ?? [];
               final roleDistribution = <String, int>{};
-              
+
               for (final staff in staffList) {
-                roleDistribution[staff.role] = (roleDistribution[staff.role] ?? 0) + 1;
+                roleDistribution[staff.role] =
+                    (roleDistribution[staff.role] ?? 0) + 1;
               }
-              
+
               return Card(
                 child: Padding(
                   padding: const EdgeInsets.all(16),
@@ -4089,7 +4372,8 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
                     children: [
                       const Text(
                         'Staff Distribution by Role',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 16),
                       if (roleDistribution.isEmpty)
@@ -4107,8 +4391,8 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
                           ),
                         )
                       else
-                        ...roleDistribution.entries.map((entry) => 
-                          Padding(
+                        ...roleDistribution.entries.map(
+                          (entry) => Padding(
                             padding: const EdgeInsets.symmetric(vertical: 4),
                             child: Row(
                               children: [
@@ -4138,22 +4422,23 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
               );
             },
           ),
-          
+
           const SizedBox(height: 16),
-          
+
           const SizedBox(height: 16),
-          
+
           // Department Distribution
           StreamBuilder<List<Staff>>(
             stream: _staffService.getAllStaff(),
             builder: (context, snapshot) {
               final staffList = snapshot.data ?? [];
               final deptDistribution = <String, int>{};
-              
+
               for (final staff in staffList) {
-                deptDistribution[staff.department] = (deptDistribution[staff.department] ?? 0) + 1;
+                deptDistribution[staff.department] =
+                    (deptDistribution[staff.department] ?? 0) + 1;
               }
-              
+
               return Card(
                 child: Padding(
                   padding: const EdgeInsets.all(16),
@@ -4162,7 +4447,8 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
                     children: [
                       const Text(
                         'Staff by Department',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 16),
                       if (deptDistribution.isEmpty)
@@ -4171,8 +4457,8 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
                           style: TextStyle(color: Colors.grey),
                         )
                       else
-                        ...deptDistribution.entries.map((entry) => 
-                          Padding(
+                        ...deptDistribution.entries.map(
+                          (entry) => Padding(
                             padding: const EdgeInsets.symmetric(vertical: 8),
                             child: Row(
                               children: [
@@ -4185,13 +4471,16 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
                                 Expanded(
                                   child: Text(
                                     entry.key,
-                                    style: const TextStyle(fontWeight: FontWeight.w500),
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w500),
                                   ),
                                 ),
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 4),
                                   decoration: BoxDecoration(
-                                    color: _getDepartmentColor(entry.key).withOpacity(0.1),
+                                    color: _getDepartmentColor(entry.key)
+                                        .withOpacity(0.1),
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                   child: Text(
@@ -4228,7 +4517,7 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
             style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 20),
-          
+
           // Time Tracking Summary with Real Data
           StreamBuilder<List<Staff>>(
             stream: _staffService.getAllStaff(),
@@ -4241,13 +4530,17 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
                   ),
                 );
               }
-              
+
               final staffList = snapshot.data ?? [];
-              final totalHours = staffList.fold<double>(0, (sum, staff) => sum + staff.totalHoursWorked);
-              final totalShifts = staffList.fold<int>(0, (sum, staff) => sum + staff.shiftsCompleted);
-              final avgHoursPerDay = staffList.isNotEmpty && totalShifts > 0 ? totalHours / totalShifts : 0.0;
+              final totalHours = staffList.fold<double>(
+                  0, (sum, staff) => sum + staff.totalHoursWorked);
+              final totalShifts = staffList.fold<int>(
+                  0, (sum, staff) => sum + staff.shiftsCompleted);
+              final avgHoursPerDay = staffList.isNotEmpty && totalShifts > 0
+                  ? totalHours / totalShifts
+                  : 0.0;
               final activeStaff = staffList.where((s) => s.isActive).length;
-              
+
               return Card(
                 child: Padding(
                   padding: const EdgeInsets.all(16),
@@ -4256,15 +4549,19 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
                     children: [
                       const Text(
                         'Time Tracking Summary',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 16),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceAround,
                         children: [
-                          _buildTimeMetric('Total Hours', '${totalHours.toStringAsFixed(1)}h'),
-                          _buildTimeMetric('Avg Hours/Shift', '${avgHoursPerDay.toStringAsFixed(1)}h'),
-                          _buildTimeMetric('Active Staff', activeStaff.toString()),
+                          _buildTimeMetric('Total Hours',
+                              '${totalHours.toStringAsFixed(1)}h'),
+                          _buildTimeMetric('Avg Hours/Shift',
+                              '${avgHoursPerDay.toStringAsFixed(1)}h'),
+                          _buildTimeMetric(
+                              'Active Staff', activeStaff.toString()),
                         ],
                       ),
                     ],
@@ -4273,15 +4570,15 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
               );
             },
           ),
-          
+
           const SizedBox(height: 16),
-          
+
           // Staff Attendance Details
           StreamBuilder<List<Staff>>(
             stream: _staffService.getAllStaff(),
             builder: (context, snapshot) {
               final staffList = snapshot.data ?? [];
-              
+
               return Card(
                 child: Padding(
                   padding: const EdgeInsets.all(16),
@@ -4290,7 +4587,8 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
                     children: [
                       const Text(
                         'Individual Staff Attendance',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 16),
                       if (staffList.isEmpty)
@@ -4309,67 +4607,89 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
                         )
                       else
                         Column(
-                          children: staffList.take(5).map((staff) => 
-                            Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 8),
-                              child: Row(
-                                children: [
-                                  CircleAvatar(
-                                    backgroundColor: staff.isActive ? Colors.green : Colors.grey,
-                                    child: Text(
-                                      staff.name.substring(0, 1).toUpperCase(),
-                                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          staff.name,
-                                          style: const TextStyle(fontWeight: FontWeight.w600),
-                                        ),
-                                        Text(
-                                          staff.role,
-                                          style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  Column(
-                                    crossAxisAlignment: CrossAxisAlignment.end,
+                          children: staffList
+                              .take(5)
+                              .map(
+                                (staff) => Padding(
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 8),
+                                  child: Row(
                                     children: [
-                                      Text(
-                                        '${staff.totalHoursWorked.toStringAsFixed(1)}h',
-                                        style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue),
+                                      CircleAvatar(
+                                        backgroundColor: staff.isActive
+                                            ? Colors.green
+                                            : Colors.grey,
+                                        child: Text(
+                                          staff.name
+                                              .substring(0, 1)
+                                              .toUpperCase(),
+                                          style: const TextStyle(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.bold),
+                                        ),
                                       ),
-                                      Text(
-                                        '${staff.shiftsCompleted} shifts',
-                                        style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              staff.name,
+                                              style: const TextStyle(
+                                                  fontWeight: FontWeight.w600),
+                                            ),
+                                            Text(
+                                              staff.role,
+                                              style: TextStyle(
+                                                  color: Colors.grey.shade600,
+                                                  fontSize: 12),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.end,
+                                        children: [
+                                          Text(
+                                            '${staff.totalHoursWorked.toStringAsFixed(1)}h',
+                                            style: const TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                color: Colors.blue),
+                                          ),
+                                          Text(
+                                            '${staff.shiftsCompleted} shifts',
+                                            style: TextStyle(
+                                                color: Colors.grey.shade600,
+                                                fontSize: 12),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Container(
+                                        width: 8,
+                                        height: 8,
+                                        decoration: BoxDecoration(
+                                          color: staff.isActive
+                                              ? Colors.green
+                                              : Colors.red,
+                                          shape: BoxShape.circle,
+                                        ),
                                       ),
                                     ],
                                   ),
-                                  const SizedBox(width: 8),
-                                  Container(
-                                    width: 8,
-                                    height: 8,
-                                    decoration: BoxDecoration(
-                                      color: staff.isActive ? Colors.green : Colors.red,
-                                      shape: BoxShape.circle,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ).toList(),
+                                ),
+                              )
+                              .toList(),
                         ),
                       if (staffList.length > 5)
                         Padding(
                           padding: const EdgeInsets.only(top: 8),
                           child: Text(
                             'Showing 5 of ${staffList.length} staff members',
-                            style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                            style: TextStyle(
+                                color: Colors.grey.shade600, fontSize: 12),
                           ),
                         ),
                     ],
@@ -4378,21 +4698,22 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
               );
             },
           ),
-          
+
           const SizedBox(height: 16),
-          
+
           // Check-in Status
           StreamBuilder<List<Staff>>(
             stream: _staffService.getAllStaff(),
             builder: (context, snapshot) {
               final staffList = snapshot.data ?? [];
-              final checkedInToday = staffList.where((s) => 
-                s.lastCheckIn != null && 
-                s.lastCheckIn!.day == DateTime.now().day &&
-                s.lastCheckIn!.month == DateTime.now().month &&
-                s.lastCheckIn!.year == DateTime.now().year
-              ).length;
-              
+              final checkedInToday = staffList
+                  .where((s) =>
+                      s.lastCheckIn != null &&
+                      s.lastCheckIn!.day == DateTime.now().day &&
+                      s.lastCheckIn!.month == DateTime.now().month &&
+                      s.lastCheckIn!.year == DateTime.now().year)
+                  .length;
+
               return Card(
                 child: Padding(
                   padding: const EdgeInsets.all(16),
@@ -4401,17 +4722,23 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
                     children: [
                       const Text(
                         'Today\'s Check-in Status',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 16),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceAround,
                         children: [
-                          _buildStatusMetric('Checked In', checkedInToday.toString(), Colors.green),
-                          _buildStatusMetric('Total Staff', staffList.length.toString(), Colors.blue),
-                          _buildStatusMetric('Attendance Rate', 
-                            staffList.isNotEmpty ? '${((checkedInToday / staffList.length) * 100).toStringAsFixed(0)}%' : '0%', 
-                            Colors.orange),
+                          _buildStatusMetric('Checked In',
+                              checkedInToday.toString(), Colors.green),
+                          _buildStatusMetric('Total Staff',
+                              staffList.length.toString(), Colors.blue),
+                          _buildStatusMetric(
+                              'Attendance Rate',
+                              staffList.isNotEmpty
+                                  ? '${((checkedInToday / staffList.length) * 100).toStringAsFixed(0)}%'
+                                  : '0%',
+                              Colors.orange),
                         ],
                       ),
                     ],
@@ -4436,7 +4763,7 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
             style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 20),
-          
+
           // Department Performance with Real Data
           StreamBuilder<List<Staff>>(
             stream: _staffService.getAllStaff(),
@@ -4449,10 +4776,10 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
                   ),
                 );
               }
-              
+
               final staffList = snapshot.data ?? [];
               final departmentStats = <String, Map<String, dynamic>>{};
-              
+
               // Calculate department statistics
               for (final staff in staffList) {
                 if (!departmentStats.containsKey(staff.department)) {
@@ -4464,16 +4791,19 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
                     'totalSalary': 0.0,
                   };
                 }
-                
+
                 departmentStats[staff.department]!['count']++;
-                departmentStats[staff.department]!['totalHours'] += staff.totalHoursWorked;
-                departmentStats[staff.department]!['totalShifts'] += staff.shiftsCompleted;
-                departmentStats[staff.department]!['totalSalary'] += staff.hourlyRate * staff.totalHoursWorked;
+                departmentStats[staff.department]!['totalHours'] +=
+                    staff.totalHoursWorked;
+                departmentStats[staff.department]!['totalShifts'] +=
+                    staff.shiftsCompleted;
+                departmentStats[staff.department]!['totalSalary'] +=
+                    staff.hourlyRate * staff.totalHoursWorked;
                 if (staff.isActive) {
                   departmentStats[staff.department]!['activeCount']++;
                 }
               }
-              
+
               return Card(
                 child: Padding(
                   padding: const EdgeInsets.all(16),
@@ -4482,7 +4812,8 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
                     children: [
                       const Text(
                         'Department Performance',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 16),
                       if (departmentStats.isEmpty)
@@ -4504,21 +4835,26 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
                           children: departmentStats.entries.map((entry) {
                             final department = entry.key;
                             final stats = entry.value;
-                            final avgHours = stats['totalShifts'] > 0 
-                                ? (stats['totalHours'] / stats['totalShifts']).toStringAsFixed(1)
+                            final avgHours = stats['totalShifts'] > 0
+                                ? (stats['totalHours'] / stats['totalShifts'])
+                                    .toStringAsFixed(1)
                                 : '0.0';
-                            final activeRate = stats['count'] > 0 
-                                ? ((stats['activeCount'] / stats['count']) * 100).toStringAsFixed(0)
+                            final activeRate = stats['count'] > 0
+                                ? ((stats['activeCount'] / stats['count']) *
+                                        100)
+                                    .toStringAsFixed(0)
                                 : '0';
-                            
+
                             return Container(
                               margin: const EdgeInsets.only(bottom: 16),
                               padding: const EdgeInsets.all(16),
                               decoration: BoxDecoration(
-                                color: _getDepartmentColor(department).withOpacity(0.1),
+                                color: _getDepartmentColor(department)
+                                    .withOpacity(0.1),
                                 borderRadius: BorderRadius.circular(12),
                                 border: Border.all(
-                                  color: _getDepartmentColor(department).withOpacity(0.3),
+                                  color: _getDepartmentColor(department)
+                                      .withOpacity(0.3),
                                 ),
                               ),
                               child: Column(
@@ -4529,8 +4865,10 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
                                       Container(
                                         padding: const EdgeInsets.all(8),
                                         decoration: BoxDecoration(
-                                          color: _getDepartmentColor(department),
-                                          borderRadius: BorderRadius.circular(8),
+                                          color:
+                                              _getDepartmentColor(department),
+                                          borderRadius:
+                                              BorderRadius.circular(8),
                                         ),
                                         child: Icon(
                                           _getDepartmentIcon(department),
@@ -4549,10 +4887,13 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
                                         ),
                                       ),
                                       Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 8, vertical: 4),
                                         decoration: BoxDecoration(
-                                          color: _getDepartmentColor(department),
-                                          borderRadius: BorderRadius.circular(12),
+                                          color:
+                                              _getDepartmentColor(department),
+                                          borderRadius:
+                                              BorderRadius.circular(12),
                                         ),
                                         child: Text(
                                           '${stats['count']} staff',
@@ -4567,11 +4908,15 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
                                   ),
                                   const SizedBox(height: 12),
                                   Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceAround,
                                     children: [
-                                      _buildDeptMetric('Avg Hours/Shift', '${avgHours}h'),
-                                      _buildDeptMetric('Active Rate', '$activeRate%'),
-                                      _buildDeptMetric('Total Hours', '${stats['totalHours'].toStringAsFixed(0)}h'),
+                                      _buildDeptMetric(
+                                          'Avg Hours/Shift', '${avgHours}h'),
+                                      _buildDeptMetric(
+                                          'Active Rate', '$activeRate%'),
+                                      _buildDeptMetric('Total Hours',
+                                          '${stats['totalHours'].toStringAsFixed(0)}h'),
                                     ],
                                   ),
                                 ],
@@ -4585,46 +4930,49 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
               );
             },
           ),
-          
+
           const SizedBox(height: 16),
-          
+
           // Top Performing Departments
           StreamBuilder<List<Staff>>(
             stream: _staffService.getAllStaff(),
             builder: (context, snapshot) {
               final staffList = snapshot.data ?? [];
-              
+
               if (staffList.isEmpty) {
                 return const SizedBox.shrink();
               }
-              
+
               // Calculate department performance scores
               final departmentPerformance = <String, double>{};
               final departmentCounts = <String, int>{};
-              
+
               for (final staff in staffList) {
-                departmentCounts[staff.department] = (departmentCounts[staff.department] ?? 0) + 1;
-                
+                departmentCounts[staff.department] =
+                    (departmentCounts[staff.department] ?? 0) + 1;
+
                 // Simple performance score based on hours worked and shifts completed
-                final performanceScore = staff.shiftsCompleted > 0 
-                    ? (staff.totalHoursWorked / staff.shiftsCompleted) * (staff.isActive ? 1.2 : 1.0)
+                final performanceScore = staff.shiftsCompleted > 0
+                    ? (staff.totalHoursWorked / staff.shiftsCompleted) *
+                        (staff.isActive ? 1.2 : 1.0)
                     : 0.0;
-                
-                departmentPerformance[staff.department] = 
-                    (departmentPerformance[staff.department] ?? 0.0) + performanceScore;
+
+                departmentPerformance[staff.department] =
+                    (departmentPerformance[staff.department] ?? 0.0) +
+                        performanceScore;
               }
-              
+
               // Calculate average performance per department
               final avgPerformance = departmentPerformance.entries.map((entry) {
-                final avgScore = departmentCounts[entry.key]! > 0 
+                final avgScore = departmentCounts[entry.key]! > 0
                     ? entry.value / departmentCounts[entry.key]!
                     : 0.0;
                 return MapEntry(entry.key, avgScore);
               }).toList();
-              
+
               // Sort by performance
               avgPerformance.sort((a, b) => b.value.compareTo(a.value));
-              
+
               return Card(
                 child: Padding(
                   padding: const EdgeInsets.all(16),
@@ -4633,14 +4981,19 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
                     children: [
                       const Text(
                         'Department Performance Ranking',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 16),
                       Column(
                         children: avgPerformance.take(3).map((entry) {
                           final index = avgPerformance.indexOf(entry);
-                          final medal = index == 0 ? '🥇' : index == 1 ? '🥈' : '🥉';
-                          
+                          final medal = index == 0
+                              ? '🥇'
+                              : index == 1
+                                  ? '🥈'
+                                  : '🥉';
+
                           return Container(
                             margin: const EdgeInsets.only(bottom: 8),
                             padding: const EdgeInsets.all(12),
@@ -4682,15 +5035,15 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
               );
             },
           ),
-          
+
           const SizedBox(height: 16),
-          
+
           // Export Options with Real Functionality
           StreamBuilder<List<Staff>>(
             stream: _staffService.getAllStaff(),
             builder: (context, snapshot) {
               final staffList = snapshot.data ?? [];
-              
+
               return Card(
                 child: Padding(
                   padding: const EdgeInsets.all(16),
@@ -4699,13 +5052,16 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
                     children: [
                       const Text(
                         'Export Reports',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 16),
                       Row(
                         children: [
                           ElevatedButton.icon(
-                            onPressed: staffList.isNotEmpty ? () => _exportReportsPDF(staffList) : null,
+                            onPressed: staffList.isNotEmpty
+                                ? () => _exportReportsPDF(staffList)
+                                : null,
                             icon: const Icon(Icons.picture_as_pdf),
                             label: const Text('Export PDF'),
                             style: ElevatedButton.styleFrom(
@@ -4715,7 +5071,9 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
                           ),
                           const SizedBox(width: 16),
                           ElevatedButton.icon(
-                            onPressed: staffList.isNotEmpty ? () => _exportReportsCSV(staffList) : null,
+                            onPressed: staffList.isNotEmpty
+                                ? () => _exportReportsCSV(staffList)
+                                : null,
                             icon: const Icon(Icons.table_chart),
                             label: const Text('Export CSV'),
                             style: ElevatedButton.styleFrom(
@@ -4747,7 +5105,8 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
     );
   }
 
-  Widget _buildSummaryCard(String title, String value, IconData icon, Color color) {
+  Widget _buildSummaryCard(
+      String title, String value, IconData icon, Color color) {
     return Card(
       elevation: 4,
       child: Padding(
@@ -4818,198 +5177,200 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
   }
 
   Color _getRoleColor(String role) {
-     switch (role.toLowerCase()) {
-       case 'manager':
-         return Colors.purple;
-       case 'developer':
-         return Colors.blue;
-       case 'designer':
-         return Colors.orange;
-       case 'analyst':
-         return Colors.green;
-       case 'hr':
-         return Colors.red;
-       case 'sales':
-         return Colors.teal;
-       default:
-         return Colors.grey;
-     }
-   }
-
-   Color _getDepartmentColor(String department) {
-     switch (department.toLowerCase()) {
-       case 'engineering':
-         return Colors.blue;
-       case 'design':
-         return Colors.purple;
-       case 'marketing':
-         return Colors.orange;
-       case 'sales':
-         return Colors.green;
-       case 'hr':
-         return Colors.red;
-       case 'finance':
-         return Colors.indigo;
-       default:
-         return Colors.grey;
-     }
-   }
-
-   Widget _buildStatusMetric(String label, String value, Color color) {
-     return Column(
-       children: [
-         Container(
-           padding: const EdgeInsets.all(12),
-           decoration: BoxDecoration(
-             color: color.withOpacity(0.1),
-             borderRadius: BorderRadius.circular(8),
-           ),
-           child: Icon(
-             Icons.people,
-             color: color,
-             size: 24,
-           ),
-         ),
-         const SizedBox(height: 8),
-         Text(
-           value,
-           style: TextStyle(
-             fontSize: 20,
-             fontWeight: FontWeight.bold,
-             color: color,
-           ),
-         ),
-         Text(
-           label,
-           style: TextStyle(
-             fontSize: 12,
-             color: Colors.grey.shade600,
-           ),
-         ),
-       ],
-     );
-   }
-
-   Widget _buildDeptMetric(String label, String value) {
-     return Column(
-       children: [
-         Text(
-           value,
-           style: const TextStyle(
-             fontSize: 16,
-             fontWeight: FontWeight.bold,
-             color: Colors.blue,
-           ),
-         ),
-         Text(
-           label,
-           style: const TextStyle(
-             fontSize: 11,
-             color: Colors.grey,
-           ),
-           textAlign: TextAlign.center,
-         ),
-       ],
-     );
-   }
-
-   IconData _getDepartmentIcon(String department) {
-      switch (department.toLowerCase()) {
-        case 'operations':
-          return Icons.settings;
-        case 'customer service':
-          return Icons.support_agent;
-        case 'kitchen':
-          return Icons.restaurant;
-        case 'maintenance':
-          return Icons.build;
-        case 'engineering':
-          return Icons.engineering;
-        case 'design':
-          return Icons.design_services;
-        case 'marketing':
-          return Icons.campaign;
-        case 'sales':
-          return Icons.trending_up;
-        case 'hr':
-          return Icons.people;
-        case 'finance':
-          return Icons.account_balance;
-        default:
-          return Icons.business;
-      }
+    switch (role.toLowerCase()) {
+      case 'manager':
+        return Colors.purple;
+      case 'developer':
+        return Colors.blue;
+      case 'designer':
+        return Colors.orange;
+      case 'analyst':
+        return Colors.green;
+      case 'hr':
+        return Colors.red;
+      case 'sales':
+        return Colors.teal;
+      default:
+        return Colors.grey;
     }
+  }
 
-    void _exportReportsPDF(List<Staff> staffList) {
-      // Generate PDF report summary
-      final totalStaff = staffList.length;
-      final activeStaff = staffList.where((s) => s.isActive).length;
-      final totalHours = staffList.fold<double>(0, (sum, staff) => sum + staff.totalHoursWorked);
-      final avgHours = totalStaff > 0 ? totalHours / totalStaff : 0.0;
-      
-      // Show export confirmation
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'PDF Report Generated: $totalStaff staff, $activeStaff active, ${totalHours.toStringAsFixed(1)}h total',
+  Color _getDepartmentColor(String department) {
+    switch (department.toLowerCase()) {
+      case 'engineering':
+        return Colors.blue;
+      case 'design':
+        return Colors.purple;
+      case 'marketing':
+        return Colors.orange;
+      case 'sales':
+        return Colors.green;
+      case 'hr':
+        return Colors.red;
+      case 'finance':
+        return Colors.indigo;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  Widget _buildStatusMetric(String label, String value, Color color) {
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(8),
           ),
-          backgroundColor: Colors.green,
-          duration: const Duration(seconds: 3),
+          child: Icon(
+            Icons.people,
+            color: color,
+            size: 24,
+          ),
         ),
-      );
-    }
+        const SizedBox(height: 8),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: Colors.grey.shade600,
+          ),
+        ),
+      ],
+    );
+  }
 
-    void _exportReportsCSV(List<Staff> staffList) {
-      // Generate CSV data
-      final csvData = StringBuffer();
-      csvData.writeln('Name,Email,Role,Department,Hourly Rate,Total Hours,Shifts Completed,Active Status');
-      
-      for (final staff in staffList) {
-        csvData.writeln(
+  Widget _buildDeptMetric(String label, String value) {
+    return Column(
+      children: [
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: Colors.blue,
+          ),
+        ),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 11,
+            color: Colors.grey,
+          ),
+          textAlign: TextAlign.center,
+        ),
+      ],
+    );
+  }
+
+  IconData _getDepartmentIcon(String department) {
+    switch (department.toLowerCase()) {
+      case 'operations':
+        return Icons.settings;
+      case 'customer service':
+        return Icons.support_agent;
+      case 'kitchen':
+        return Icons.restaurant;
+      case 'maintenance':
+        return Icons.build;
+      case 'engineering':
+        return Icons.engineering;
+      case 'design':
+        return Icons.design_services;
+      case 'marketing':
+        return Icons.campaign;
+      case 'sales':
+        return Icons.trending_up;
+      case 'hr':
+        return Icons.people;
+      case 'finance':
+        return Icons.account_balance;
+      default:
+        return Icons.business;
+    }
+  }
+
+  void _exportReportsPDF(List<Staff> staffList) {
+    // Generate PDF report summary
+    final totalStaff = staffList.length;
+    final activeStaff = staffList.where((s) => s.isActive).length;
+    final totalHours =
+        staffList.fold<double>(0, (sum, staff) => sum + staff.totalHoursWorked);
+    final avgHours = totalStaff > 0 ? totalHours / totalStaff : 0.0;
+
+    // Show export confirmation
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'PDF Report Generated: $totalStaff staff, $activeStaff active, ${totalHours.toStringAsFixed(1)}h total',
+        ),
+        backgroundColor: Colors.green,
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
+  void _exportReportsCSV(List<Staff> staffList) {
+    // Generate CSV data
+    final csvData = StringBuffer();
+    csvData.writeln(
+        'Name,Email,Role,Department,Hourly Rate,Total Hours,Shifts Completed,Active Status');
+
+    for (final staff in staffList) {
+      csvData.writeln(
           '"${staff.name}","${staff.email}","${staff.role}","${staff.department}",'
-          '${staff.hourlyRate},${staff.totalHoursWorked},${staff.shiftsCompleted},${staff.isActive}'
-        );
-      }
-      
-      // Show export confirmation with data preview
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'CSV Report Generated: ${staffList.length} records exported',
-          ),
-          backgroundColor: Colors.blue,
-          duration: const Duration(seconds: 3),
-          action: SnackBarAction(
-            label: 'Preview',
-            textColor: Colors.white,
-            onPressed: () {
-              showDialog(
-                context: context,
-                builder: (context) => AlertDialog(
-                  title: const Text('CSV Preview'),
-                  content: SingleChildScrollView(
-                    child: Text(
-                      csvData.toString().split('\n').take(6).join('\n'),
-                      style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
-                    ),
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Close'),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-        ),
-      );
+          '${staff.hourlyRate},${staff.totalHoursWorked},${staff.shiftsCompleted},${staff.isActive}');
     }
 
-   @override
-   void dispose() {
-     _tabController.dispose();
-     super.dispose();
-   }
- }
+    // Show export confirmation with data preview
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'CSV Report Generated: ${staffList.length} records exported',
+        ),
+        backgroundColor: Colors.blue,
+        duration: const Duration(seconds: 3),
+        action: SnackBarAction(
+          label: 'Preview',
+          textColor: Colors.white,
+          onPressed: () {
+            showDialog(
+              context: context,
+              builder: (context) => AlertDialog(
+                title: const Text('CSV Preview'),
+                content: SingleChildScrollView(
+                  child: Text(
+                    csvData.toString().split('\n').take(6).join('\n'),
+                    style:
+                        const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Close'),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+}

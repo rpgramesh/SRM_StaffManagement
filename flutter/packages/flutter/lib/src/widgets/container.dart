@@ -398,7 +398,7 @@ class Container extends StatelessWidget {
     }
 
     if (color != null) {
-      current = ColoredBox(color: color!, child: current);
+      current = ColoredBox(color: color, child: current);
     }
 
     if (clipBehavior != Clip.none) {

@@ -233,7 +233,6 @@ class _OpenContainerTransformDemoState extends State<OpenContainerTransformDemo>
                             (BuildContext context, void Function() openContainer) =>
                                 const _DetailsPage(),
                         tappable: false,
-                        closedShape: const RoundedRectangleBorder(),
                         closedElevation: 0,
                         closedBuilder: (BuildContext context, void Function() openContainer) {
                           return ListTile(

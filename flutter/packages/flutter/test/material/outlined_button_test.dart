@@ -24,7 +24,7 @@ void main() {
   }
 
   Color textColor(WidgetTester tester, String text) {
-    return tester.renderObject<RenderParagraph>(find.text(text)).text.style!.color!;
+    return tester.renderObject<RenderParagraph>(find.text(text)).text.style!.color;
   }
 
   testWidgets('OutlinedButton, OutlinedButton.icon defaults', (WidgetTester tester) async {
@@ -59,7 +59,7 @@ void main() {
     expect(
       material.shape,
       material3
-          ? StadiumBorder(side: BorderSide(color: colorScheme.outline))
+          ? const StadiumBorder(side: BorderSide(color: colorScheme.outline))
           : RoundedRectangleBorder(
               side: BorderSide(color: colorScheme.onSurface.withOpacity(0.12)),
               borderRadius: const BorderRadius.all(Radius.circular(4)),
@@ -106,7 +106,7 @@ void main() {
     expect(
       material.shape,
       material3
-          ? StadiumBorder(side: BorderSide(color: colorScheme.outline))
+          ? const StadiumBorder(side: BorderSide(color: colorScheme.outline))
           : RoundedRectangleBorder(
               side: BorderSide(color: colorScheme.onSurface.withOpacity(0.12)),
               borderRadius: const BorderRadius.all(Radius.circular(4)),
@@ -152,7 +152,7 @@ void main() {
     expect(
       material.shape,
       material3
-          ? StadiumBorder(side: BorderSide(color: colorScheme.outline))
+          ? const StadiumBorder(side: BorderSide(color: colorScheme.outline))
           : RoundedRectangleBorder(
               side: BorderSide(color: colorScheme.onSurface.withOpacity(0.12)),
               borderRadius: const BorderRadius.all(Radius.circular(4)),
@@ -595,9 +595,9 @@ void main() {
           MaterialState.focused,
         };
         if (states.any(interactiveStates.contains)) {
-          return Colors.blue[900]!;
+          return Colors.blue[900];
         }
-        return Colors.blue[800]!;
+        return Colors.blue[800];
       }
 
       await tester.pumpWidget(

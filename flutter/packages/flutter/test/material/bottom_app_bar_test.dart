@@ -314,7 +314,9 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: ThemeData.from(colorScheme: colorScheme),
-        home: Scaffold(bottomNavigationBar: BottomAppBar(color: colorScheme.surfaceContainer)),
+        home: const Scaffold(
+          bottomNavigationBar: BottomAppBar(color: colorScheme.surfaceContainer),
+        ),
       ),
     );
 

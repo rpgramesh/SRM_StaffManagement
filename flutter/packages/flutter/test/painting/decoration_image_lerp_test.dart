@@ -335,9 +335,9 @@ void main() {
 
       if (!kIsWeb) {
         // TODO(ianh): https://github.com/flutter/flutter/issues/130610
-        final ui.Image image = (await tester.binding.runAsync<ui.Image>(
+        final ui.Image image = await tester.binding.runAsync<ui.Image>(
           () => captureImage(find.byType(Wrap).evaluate().single),
-        ))!;
+        );
         addTearDown(() => image.dispose());
         final Uint8List bytes = (await tester.binding.runAsync<ByteData?>(
           () => image.toByteData(format: ui.ImageByteFormat.rawStraightRgba),
@@ -838,9 +838,9 @@ void main() {
 
       if (!kIsWeb) {
         // TODO(ianh): https://github.com/flutter/flutter/issues/130610
-        final ui.Image image = (await tester.binding.runAsync<ui.Image>(
+        final ui.Image image = await tester.binding.runAsync<ui.Image>(
           () => captureImage(find.byType(Wrap).evaluate().single),
-        ))!;
+        );
         addTearDown(() => image.dispose());
         final Uint8List bytes = (await tester.binding.runAsync<ByteData?>(
           () => image.toByteData(format: ui.ImageByteFormat.rawStraightRgba),
